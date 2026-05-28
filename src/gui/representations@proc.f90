@@ -84,6 +84,14 @@ contains
        r%isinit = .true.
        r%shown = .true.
        r%name = "Unit Cell"
+    elseif (itype == reptype_axes) then
+       r%isinit = .true.
+       r%shown = .true.
+       r%name = "Cartesian Axes"
+       ! axes draw arrows directly, not atoms/bonds/labels
+       r%atoms_display = .false.
+       r%bonds_display = .false.
+       r%labels_display = .false.
     else
        r%isinit = .false.
        r%shown = .false.
@@ -222,6 +230,18 @@ contains
        end if
        r%uc_innersteplen = uc_innersteplen_def
        r%uc_innerstipple = .true.
+    end if
+
+    ! cartesian axes
+    if (itype == 0 .or. itype == 6) then
+       r%axes_origin = 0d0
+       r%axes_length = axes_length_def
+       r%axes_radius = axes_radius_def
+       r%axes_headfrac = axes_headfrac_def
+       r%axes_headradf = axes_headradf_def
+       r%axes_rgb(:,1) = (/1._c_float, 0._c_float, 0._c_float/) ! X = red
+       r%axes_rgb(:,2) = (/0._c_float, 1._c_float, 0._c_float/) ! Y = green
+       r%axes_rgb(:,3) = (/0._c_float, 0._c_float, 1._c_float/) ! Z = blue
     end if
 
     ! initialize the styles
@@ -757,8 +777,58 @@ contains
              end do
           end do
        end if
+    elseif (r%type == reptype_axes) then
+       !!! cartesian axes representation !!!
+       ! draw 3 arrows along world X, Y, Z from the (Cartesian) origin
+       call draw_axis_arrow((/1d0,0d0,0d0/), r%axes_rgb(:,1))
+       call draw_axis_arrow((/0d0,1d0,0d0/), r%axes_rgb(:,2))
+       call draw_axis_arrow((/0d0,0d0,1d0/), r%axes_rgb(:,3))
     end if ! reptype
   contains
+    !> Build a single axis arrow: shaft + arrowhead approximated by a
+    !> thicker, shorter lit cylinder.
+    subroutine draw_axis_arrow(udir, rgb)
+      real*8, intent(in) :: udir(3)              ! unit direction (cartesian)
+      real(c_float), intent(in) :: rgb(3)        ! color
+
+      real*8 :: x0(3), xm(3), xt(3)
+      real*8 :: lshaft, rshaft, rhead
+
+      ! geometry
+      x0 = r%axes_origin
+      lshaft = r%axes_length * (1d0 - r%axes_headfrac)
+      xm = x0 + lshaft * udir
+      xt = x0 + r%axes_length * udir
+      rshaft = r%axes_radius
+      rhead = r%axes_radius * r%axes_headradf
+
+      ! shaft (3D lit cylinder)
+      call append_cyl(x0, xm, rshaft, rgb)
+      ! arrowhead (thicker, shorter lit cylinder; stand-in for a cone)
+      call append_cyl(xm, xt, rhead, rgb)
+    end subroutine draw_axis_arrow
+
+    subroutine append_cyl(x1, x2, rad, rgb)
+      real*8, intent(in) :: x1(3), x2(3), rad
+      real(c_float), intent(in) :: rgb(3)
+
+      obj%ncyl = obj%ncyl + 1
+      if (obj%ncyl > size(obj%cyl,1)) then
+         allocate(auxcyl(2*obj%ncyl))
+         auxcyl(1:size(obj%cyl,1)) = obj%cyl
+         call move_alloc(auxcyl,obj%cyl)
+      end if
+      obj%cyl(obj%ncyl)%x1 = real(x1,c_float)
+      obj%cyl(obj%ncyl)%x2 = real(x2,c_float)
+      obj%cyl(obj%ncyl)%r = real(rad,c_float)
+      obj%cyl(obj%ncyl)%rgb = rgb
+      obj%cyl(obj%ncyl)%x1delta = (0._c_float_complex,0._c_float_complex)
+      obj%cyl(obj%ncyl)%x2delta = (0._c_float_complex,0._c_float_complex)
+      obj%cyl(obj%ncyl)%order = 1
+      obj%cyl(obj%ncyl)%border = 0._c_float
+      obj%cyl(obj%ncyl)%rgbborder = rgb
+    end subroutine append_cyl
+
     subroutine increase_ncylflat()
 
       obj%ncylflat = obj%ncylflat + 1
