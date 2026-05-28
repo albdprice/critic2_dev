@@ -45,6 +45,11 @@ module representations
   real*8, parameter, public :: uc_radius_def = 0.08d0 / bohrtoa ! radius of sticks
   real*8, parameter, public :: uc_radiusinner_def = 0.08d0 / bohrtoa ! radius of inner sticks
   real*8, parameter, public :: uc_innersteplen_def = 1.0d0 / bohrtoa ! length of stipple
+  !--> cartesian axes (representation, drawn inline with the scene)
+  real*8, parameter, public :: axes_length_def = 2.0d0 / bohrtoa     ! arrow total length (bohr)
+  real*8, parameter, public :: axes_radius_def = 0.06d0 / bohrtoa    ! shaft radius (bohr)
+  real*8, parameter, public :: axes_headfrac_def = 0.25d0            ! head length / total length
+  real*8, parameter, public :: axes_headradf_def = 2.5d0             ! head radius / shaft radius
 
   !> Draw style for atoms (geometry-dependent parameters)
   type atom_geom_style
@@ -108,7 +113,8 @@ module representations
   integer, parameter, public :: reptype_none = 0
   integer, parameter, public :: reptype_atoms = 1
   integer, parameter, public :: reptype_unitcell = 2
-  integer, parameter, public :: reptype_NUM = 2
+  integer, parameter, public :: reptype_axes = 3
+  integer, parameter, public :: reptype_NUM = 3
 
   ! representation flavors
   integer, parameter, public :: repflavor_unknown = 0
@@ -120,7 +126,8 @@ module representations
   integer, parameter, public :: repflavor_atoms_criticalpoints = 6
   integer, parameter, public :: repflavor_atoms_gradientpaths = 7
   integer, parameter, public :: repflavor_unitcell_basic = 8
-  integer, parameter, public :: repflavor_NUM = 8
+  integer, parameter, public :: repflavor_axes_cartesian = 9
+  integer, parameter, public :: repflavor_NUM = 9
 
   !> Representation: objects to draw on the scene
   type representation
@@ -188,6 +195,13 @@ module representations
      real(c_float) :: uc_rgb(3) ! unit cell cylinder colors
      real*8 :: uc_innersteplen ! number of subdivisions for the inner sticks
      logical :: uc_innerstipple ! stippled lines for the inner lines
+     ! cartesian axes (reptype_axes): X/Y/Z arrows drawn inline with the scene
+     real*8 :: axes_origin(3) ! origin offset (cartesian, bohr)
+     real*8 :: axes_length ! arrow total length (bohr)
+     real*8 :: axes_radius ! shaft radius (bohr)
+     real*8 :: axes_headfrac ! head length / total length
+     real*8 :: axes_headradf ! head radius / shaft radius
+     real(c_float) :: axes_rgb(3,3) ! per-axis color (rgb x 3 axes; default red/green/blue)
    contains
      procedure :: init => representation_init
      procedure :: set_defaults => representation_set_defaults
