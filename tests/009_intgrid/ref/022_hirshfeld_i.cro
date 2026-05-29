@@ -1,0 +1,200 @@
++ Field number 1
+  Name: zz_lih_pbe.cube
+  Source: ../../../tests/009_intgrid/zz_lih_pbe.cube
+  Type: grid
+  Spans the unit cell? Yes
+  Grid dimensions : 48  48  48  
+  Grid origin (ang_) : -5.89679997  -5.89679997  -5.49539154  
+  Grid origin (cryst. coords.) : 0.00000000  0.00000000  0.00000000  
+  Max. length Voronoi-relevant vector (ang_):  0.25093  
+  First elements... 4.003360000000E-14  7.285070000000E-14  1.291650000000E-13  
+  Last elements... 1.290880000000E-13  7.281730000000E-14  4.001970000000E-14  
+  Sum of elements... 3.599110987024E+01
+  Sum of squares of elements... 1.514771253553E+01
+  Grid domain/cell volume = 11791.4482/11791.4482
+  Grid domain integral (1) = 3.83741417
+  Cell integral (1) = 3.83741417
+  Min: 4.00197000E-14
+  Average: 3.25440447E-04
+  Max: 1.31794000E+00
+  Interpolation mode (1=nearest,2=linear,3=spline,4=tricubic,5=smoothrho): 4
+  Use core densities? F
+  Numerical derivatives? F
+  Nuclear CP signature: -3
+  Number of non-equivalent critical points: 2
+  Number of critical points in the unit cell: 2
+  Alias for this field (1): $1
+
+* Field number 1 is now REFERENCE.
+
+* List of integrable properties (3)
+#  Id  Type  Field  Name  
+    1  fval      1  Pop    
+    2  lval      1  Lap    
+    3   f        1  $1    
+
+* Hirshfeld integration 
++ Integrating atomic properties
+
++ Integrated property (number 1): Pop
++ Integrated property (number 2): Lap
++ Integrated property (number 3): $1
+
+* List of integrated atomic properties
++ The "Label" entries will be used to identify the integrable property
+  in the tables of integrated atomic properties. The entries with
+  an "x" will not be integrated.
+# id    Label      fid  Field       Additional
+  1        Pop       1 Field (v)     
+  2        Lap       1 Laplcn (v)    
+  3         $1       1 Field         
+
+* Key for the interpretation of table headings
+# Id = attractor identifier
+# cp/at = critical point/atom from the complete CP/atom list
+# (lvec) = lattice translation from CP/atom to the main cell's representative
+# ncp/nat = critical point/atom from the non-equivalent CP/atom list
+# Name = atomic name
+# Z = atomic number
+# Position = attractor position
+# Mol = molecule identifier (see corresponding table above)
+# Volume = volume of the reference field basins.
+# Pop (population) = the reference field integrated in its own basins.
+# Lap = Laplacian of the reference field integrated in the reference field basins.
+# $xxx = field xxx integrated in the basins of the reference field.
+
+* List of attractors integrated
+# Id   cp   ncp   Name  Z   mult           Position (ang_) 
+  1    1    1      Li   3   --    0.0000000    0.0000000    0.4014084  
+  2    2    2      H    1   --    0.0000000    0.0000000   -1.2042253  
+
+* Integrated atomic properties
+# (See key above for interpretation of column headings.)
+# Integrable properties 1 to 3
+# Id   cp   ncp   Name  Z   mult       Pop             Lap             $1        
+  1    1    1      Li   3   --   2.43366175E+00  1.91889959E-01  2.43366175E+00 
+  2    2    2      H    1   --   1.40375240E+00 -1.91890034E-01  1.40375240E+00 
+--------------------------------------------------------------------------------
+  Sum                            3.83741415E+00 -7.47456091E-08  3.83741415E+00 
+
+* Hirshfeld-I (iterative Hirshfeld) integration 
+* Hirshfeld-I (iterative Hirshfeld) SCF
+  Bultinck, Van Alsenoy, Ayers, Carbo-Dorca,
+    J. Chem. Phys. 126, 144111 (2007). (10.1063/1.2715563)
++ Tolerance (max |dQ|): 1.00E-04
++ Max iterations: 60
+# iter  max|dQ|       sum(Q)        atom-charges
+  1     5.663E-01  0.16259  0.5663 -0.4038 
+  2     2.255E-01  0.16259  0.7919 -0.6293 
+  3     1.160E-01  0.16259  0.9078 -0.7452 
+  4     7.875E-02  0.16259  0.9866 -0.8240 
+  5     9.016E-02  0.16259  1.0767 -0.9141 
+  6     4.343E-02  0.16315  1.1202 -0.9570 
+  7     2.831E-03  0.16315  1.1230 -0.9598 
+  8     1.863E-04  0.16315  1.1232 -0.9600 
+  9     1.226E-05  0.16315  1.1232 -0.9600 
++ Hirshfeld-I SCF converged in 9 iterations
+
++ Integrating atomic properties
+
++ Integrated property (number 1): Pop
++ Integrated property (number 2): Lap
++ Integrated property (number 3): $1
+
+* List of integrated atomic properties
++ The "Label" entries will be used to identify the integrable property
+  in the tables of integrated atomic properties. The entries with
+  an "x" will not be integrated.
+# id    Label      fid  Field       Additional
+  1        Pop       1 Field (v)     
+  2        Lap       1 Laplcn (v)    
+  3         $1       1 Field         
+
+* Key for the interpretation of table headings
+# Id = attractor identifier
+# cp/at = critical point/atom from the complete CP/atom list
+# (lvec) = lattice translation from CP/atom to the main cell's representative
+# ncp/nat = critical point/atom from the non-equivalent CP/atom list
+# Name = atomic name
+# Z = atomic number
+# Position = attractor position
+# Mol = molecule identifier (see corresponding table above)
+# Volume = volume of the reference field basins.
+# Pop (population) = the reference field integrated in its own basins.
+# Lap = Laplacian of the reference field integrated in the reference field basins.
+# $xxx = field xxx integrated in the basins of the reference field.
+
+* List of attractors integrated
+# Id   cp   ncp   Name  Z   mult           Position (ang_) 
+  1    1    1      Li   3   --    0.0000000    0.0000000    0.4014084  
+  2    2    2      H    1   --    0.0000000    0.0000000   -1.2042253  
+
+* Integrated atomic properties
+# (See key above for interpretation of column headings.)
+# Integrable properties 1 to 3
+# Id   cp   ncp   Name  Z   mult       Pop             Lap             $1        
+  1    1    1      Li   3   --   1.87679606E+00 -5.64862876E-01  1.87679606E+00 
+  2    2    2      H    1   --   1.96005099E+00  5.64614793E-01  1.96005099E+00 
+--------------------------------------------------------------------------------
+  Sum                            3.83684705E+00 -2.48082944E-04  3.83684705E+00 
+
+* Hirshfeld-I (iterative Hirshfeld) integration 
+* Hirshfeld-I (iterative Hirshfeld) SCF
+  Bultinck, Van Alsenoy, Ayers, Carbo-Dorca,
+    J. Chem. Phys. 126, 144111 (2007). (10.1063/1.2715563)
++ Tolerance (max |dQ|): 1.00E-04
++ Max iterations: 60
++ User WFCDIR: ../../../dat/hirshfeld_proatoms/ld1_pbe
+# iter  max|dQ|       sum(Q)        atom-charges
+  1     5.663E-01  0.16259  0.5663 -0.4038 
+  2     2.681E-01  0.16259  0.8344 -0.6718 
+  3     1.610E-01  0.16259  0.9954 -0.8328 
+  4     1.279E-01  0.16259  1.1233 -0.9607 
+  5     1.467E-02  0.16315  1.1380 -0.9748 
+  6     1.093E-03  0.16315  1.1391 -0.9759 
+  7     8.323E-05  0.16315  1.1391 -0.9760 
++ Hirshfeld-I SCF converged in 7 iterations
+
++ Integrating atomic properties
+
++ Integrated property (number 1): Pop
++ Integrated property (number 2): Lap
++ Integrated property (number 3): $1
+
+* List of integrated atomic properties
++ The "Label" entries will be used to identify the integrable property
+  in the tables of integrated atomic properties. The entries with
+  an "x" will not be integrated.
+# id    Label      fid  Field       Additional
+  1        Pop       1 Field (v)     
+  2        Lap       1 Laplcn (v)    
+  3         $1       1 Field         
+
+* Key for the interpretation of table headings
+# Id = attractor identifier
+# cp/at = critical point/atom from the complete CP/atom list
+# (lvec) = lattice translation from CP/atom to the main cell's representative
+# ncp/nat = critical point/atom from the non-equivalent CP/atom list
+# Name = atomic name
+# Z = atomic number
+# Position = attractor position
+# Mol = molecule identifier (see corresponding table above)
+# Volume = volume of the reference field basins.
+# Pop (population) = the reference field integrated in its own basins.
+# Lap = Laplacian of the reference field integrated in the reference field basins.
+# $xxx = field xxx integrated in the basins of the reference field.
+
+* List of attractors integrated
+# Id   cp   ncp   Name  Z   mult           Position (ang_) 
+  1    1    1      Li   3   --    0.0000000    0.0000000    0.4014084  
+  2    2    2      H    1   --    0.0000000    0.0000000   -1.2042253  
+
+* Integrated atomic properties
+# (See key above for interpretation of column headings.)
+# Integrable properties 1 to 3
+# Id   cp   ncp   Name  Z   mult       Pop             Lap             $1        
+  1    1    1      Li   3   --   1.86076806E+00 -7.40797456E-01  1.86076806E+00 
+  2    2    2      H    1   --   1.97606505E+00  7.40655778E-01  1.97606505E+00 
+--------------------------------------------------------------------------------
+  Sum                            3.83683311E+00 -1.41677124E-04  3.83683311E+00 
+

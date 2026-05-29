@@ -18,6 +18,7 @@ set(TESTS
   019_isosurface           ## isosurface keyword
   020_grid_only            ## only option in YT, BADER
   021_voronoi              ## voronoi keyword, basic
+  022_hirshfeld_i          ## hirshfeld_i keyword + anion references
   )
 
 runtests(${TESTS})

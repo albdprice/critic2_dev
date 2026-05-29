@@ -1,0 +1,18 @@
+## check: 022_hirshfeld_i.cro -a1e-6
+## labels: regression quick nodata
+
+# Hirshfeld-I regression + demonstration on LiH (PBE/def2-TZVP density).
+# Plain Hirshfeld under-polarizes (Li ~ +0.57); iterative Hirshfeld recovers
+# the ionicity (Li ~ +1, H ~ -1). Exercises the keyword, the SCF, the
+# built-in anion extrapolation, and the shipped .rho anion references.
+# Paths are relative to the build test dir (build assumed at <repo>/build).
+
+molecule ../../../tests/009_intgrid/zz_lih_pbe.cube
+load ../../../tests/009_intgrid/zz_lih_pbe.cube
+integrable 1
+
+hirshfeld
+
+hirshfeld_i
+
+hirshfeld_i wfcdir ../../../dat/hirshfeld_proatoms/ld1_pbe
