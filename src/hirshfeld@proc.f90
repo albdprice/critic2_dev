@@ -527,22 +527,39 @@ contains
 
   contains
     subroutine load_one(iz,q)
+      use grid1mod, only: grid1_read_rho
       integer, intent(in) :: iz, q
+      character(len=:), allocatable :: base, qstr, symstr
+
       if (q == 0) return                                ! neutral lives in agrid
       if (q < lbound(hi_cache,2) .or. q > ubound(hi_cache,2)) return
       if (hi_cache(iz,q)%isinit) return
       if (hi_cache_tried(iz,q)) return
       hi_cache_tried(iz,q) = .true.
 
-      ! (1) WFCDIR/<elem>_q<+|->N.wfc
+      ! WFCDIR lookup: <elem>_q<+|->N with .rho preferred over .wfc.
+      ! Use the trimmed lowercase element symbol (e.g. "o", "cl"), not the
+      ! underscore-padded internal name, so files are named o_q-1.rho etc.
+      ! string(q) already carries the sign for q<0, so prefix "+" only for q>=0.
       if (have_wfcdir) then
+         symstr = trim(lower(nameguess(iz,.true.)))
          if (q >= 0) then
-            fname = trim(bas%hi_wfcdir) // dirsep // lower(nameguess(iz)) // &
-                    "_q+" // trim(string(q)) // ".wfc"
+            qstr = "_q+" // trim(string(q))
          else
-            fname = trim(bas%hi_wfcdir) // dirsep // lower(nameguess(iz)) // &
-                    "_q" // trim(string(q)) // ".wfc"
+            qstr = "_q" // trim(string(q))
          end if
+         base = trim(bas%hi_wfcdir) // dirsep // symstr // qstr
+
+         ! (1a) precomputed spherical radial density (.rho)
+         fname = base // ".rho"
+         inquire(file=fname,exist=exist)
+         if (exist) then
+            call grid1_read_rho(hi_cache(iz,q),fname,iz,q)
+            if (hi_cache(iz,q)%isinit) return
+         end if
+
+         ! (1b) user-supplied .wfc (orbital format)
+         fname = base // ".wfc"
          inquire(file=fname,exist=exist)
          if (exist) then
             call hirsh_i_load_userfile(hi_cache(iz,q),fname,iz,q)

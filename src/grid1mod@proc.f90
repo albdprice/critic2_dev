@@ -217,6 +217,105 @@ contains
 
   end subroutine grid1_read_file
 
+  !> Load a precomputed spherically-averaged radial density from a
+  !> 2-column ".rho" file (r in bohr, rho in electrons/bohr^3) into grid
+  !> g. The radial grid must be logarithmic (r_i = a*exp(b*(i-1))), as
+  !> produced by tools/wfc_generator/gen_anion_rho.py. Used for
+  !> Hirshfeld-I anion reference densities (WFCDIR). Comment lines start
+  !> with '#'; the first non-comment token is the number of grid points,
+  !> followed by that many "r rho" pairs. First/second radial derivatives
+  !> are filled by finite differences (used only for gradient/laplacian
+  !> of the pro-density; the Hirshfeld-I weight needs the value only).
+  module subroutine grid1_read_rho(g,file,z,q,ti)
+    use tools_io, only: uout, warning, ferror, fopen_read, fclose, getline_raw
+    class(grid1), intent(inout) :: g
+    character(len=*), intent(in) :: file
+    integer, intent(in) :: z, q
+    type(thread_info), intent(in), optional :: ti
+
+    integer :: i, lu, n
+    logical :: exist, ok
+    character(len=:), allocatable :: line
+    real*8 :: dr1, dr2
+
+    inquire(file=file,exist=exist)
+    if (.not.exist) then
+       g%isinit = .false.
+       return
+    end if
+
+    lu = fopen_read(file,abspath0=.true.,ti=ti)
+
+    ! skip comment (#) and blank lines, then read the point count
+    n = 0
+    do while (.true.)
+       ok = getline_raw(lu,line,.false.)
+       if (.not.ok) exit
+       if (len_trim(line) == 0) cycle
+       if (index(adjustl(line),"#") == 1) cycle
+       read (line,*,err=999) n
+       exit
+    end do
+    if (n < 4) then
+       call ferror("grid1_read_rho","too few points in .rho file: "//trim(file),warning)
+       g%isinit = .false.
+       call fclose(lu)
+       return
+    end if
+
+    ! allocate and read the r, rho pairs
+    if (allocated(g%r)) deallocate(g%r)
+    if (allocated(g%f)) deallocate(g%f)
+    if (allocated(g%fp)) deallocate(g%fp)
+    if (allocated(g%fpp)) deallocate(g%fpp)
+    allocate(g%r(n),g%f(n),g%fp(n),g%fpp(n))
+    do i = 1, n
+       read (lu,*,err=999,end=999) g%r(i), g%f(i)
+    end do
+    call fclose(lu)
+
+    ! grid metadata (assumes logarithmic grid)
+    g%ngrid = n
+    g%norb = 0
+    g%z = z
+    g%qat = q
+    g%a = g%r(1)
+    g%b = log(g%r(2)/g%r(1))
+    g%rmax = g%r(n)
+    g%rmax2 = g%r(n)**2
+
+    ! finite-difference radial derivatives (not used by Hirshfeld-I, but
+    ! filled so interp() can return consistent gradient/laplacian).
+    do i = 1, n
+       if (i == 1) then
+          g%fp(i) = (g%f(2) - g%f(1)) / (g%r(2) - g%r(1))
+       elseif (i == n) then
+          g%fp(i) = (g%f(n) - g%f(n-1)) / (g%r(n) - g%r(n-1))
+       else
+          g%fp(i) = (g%f(i+1) - g%f(i-1)) / (g%r(i+1) - g%r(i-1))
+       end if
+    end do
+    do i = 1, n
+       if (i == 1 .or. i == n) then
+          g%fpp(i) = 0d0
+       else
+          dr1 = g%r(i) - g%r(i-1)
+          dr2 = g%r(i+1) - g%r(i)
+          g%fpp(i) = 2d0*(g%f(i-1)/(dr1*(dr1+dr2)) - g%f(i)/(dr1*dr2) + &
+             g%f(i+1)/(dr2*(dr1+dr2)))
+       end if
+    end do
+
+    g%isinit = .true.
+    return
+
+999 continue
+    call ferror("grid1_read_rho","error reading .rho file: "//trim(file),warning)
+    g%isinit = .false.
+    call fclose(lu)
+
+  end subroutine grid1_read_rho
+
   !xx! private procedures
 
   !> Read grid in critic format. This format is adapted from the wfc files
