@@ -73,7 +73,9 @@ _CONF = [
  "[Rn] 5f14 6d6 7s2","[Rn] 5f14 6d7 7s2","[Rn] 5f14 6d8 7s2","[Rn] 5f14 6d9 7s2",
  "[Rn] 5f14 6d10 7s2","[Rn] 5f14 6d10 7s2 7p1","[Rn] 5f14 6d10 7s2 7p2",
  "[Rn] 5f14 6d10 7s2 7p3","[Rn] 5f14 6d10 7s2 7p4","[Rn] 5f14 6d10 7s2 7p5",
- "[Rn] 5f14 6d10 7s2 7p6"]
+ "[Rn] 5f14 6d10 7s2 7p6",
+ # N=119 (Og- anion, isoelectronic with hypothetical element 119): add 8s1
+ "[Rn] 5f14 6d10 7s2 7p6 8s1"]
 CONF_BY_N = {i+1: c for i, c in enumerate(_CONF)}
 
 

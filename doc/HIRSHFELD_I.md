@@ -216,13 +216,22 @@ down by 0.8× until `ld1.x` converges; such cases are flagged
 exact box as long as it sits in the "binds but gentle" window. `α=3.6`
 places most elements there (rmax ≈ 11.9 for O, 13.5 for I, 18.9 for Cs).
 
-Ready-made databases:
-- `dat/hirshfeld_proatoms/ld1_pbe/` — main-group H–Kr (legacy ladder).
-- `dat/hirshfeld_proatoms/ld1_pbe_all/` — **whole periodic table**,
-  q=−1 for every element H–Og and q=−2 for the p-block (groups 13–16),
-  using the standardized `α·R99` rule. A few deeply-unbound cases (e.g.
-  B²⁻, C²⁻) are omitted — doubly-charged anions of electropositive
-  atoms have no bound free-ion limit even under tight confinement.
+Ready-made database `dat/hirshfeld_proatoms/ld1_pbe/` — **whole periodic
+table**, 137 files: q=−1 for Z=1–117 and q=−2 for the p-block
+(groups 13–16), using the standardized `α·R99` rule.
+
+Coverage notes:
+- **Z=104–117 (Rf–Ts)** require an `ld1.x` patched to accept Z>103
+  (stock `ld1.x` caps at 103); see `tools/wfc_generator/ld1x_highZ.patch`
+  — the same max-Z bump the shipped neutral `dat/wfc` set used. The
+  generated `.rho` files are shipped, so no patched `ld1.x` is needed to
+  *use* the database, only to regenerate the superheavy entries.
+- **Og⁻ (Z=118)** is the single omission: its anion would occupy an 8s
+  shell (n=8) beyond `ld1.x`'s quantum-number tables, and a noble-gas
+  anion is meaningless.
+- A few deeply-unbound multiply-charged cases (e.g. B²⁻, C²⁻) are
+  absent — doubly-charged anions of electropositive atoms have no bound
+  free-ion limit even under tight confinement.
 
 ### Three-way comparison (water O, PBE)
 

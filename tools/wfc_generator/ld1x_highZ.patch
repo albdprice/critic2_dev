@@ -1,0 +1,22 @@
+# Patch to let Quantum ESPRESSO's ld1.x accept Z > 103, needed to generate
+# confined anion references for the superheavy elements (Rf-Ts, Z=104-117).
+# This is the same max-Z bump the original critic2 dat/wfc neutral set used.
+#
+# Tested against QE 7.2 (gitlab.com/QEF/q-e tag qe-7.2). Build serial:
+#     ./configure --disable-parallel && make ld1
+# then point the generator at it:
+#     gen_anion_rho_ld1.py rf -1 --ld1 /path/to/q-e/bin/ld1.x
+#
+# One-line change in atomic/src/ld1_readin.f90 (raise the zed ceiling):
+
+--- a/atomic/src/ld1_readin.f90
++++ b/atomic/src/ld1_readin.f90
+@@ -254 +254 @@
+-     if (zed <=0.0_dp .or. zed > 103._dp) then
++     if (zed <=0.0_dp .or. zed > 120._dp) then
+
+# Note: element 118 (Og) q=-1 still cannot be generated -- its anion would
+# occupy an 8s orbital (principal quantum number n=8), which exceeds ld1.x's
+# quantum-number tables ("wrong main quantum number"). Og- is chemically
+# meaningless (noble-gas anion), so it is the single omission; the database
+# covers q=-1 for Z=1-117 and q=-2 for the p-block.
