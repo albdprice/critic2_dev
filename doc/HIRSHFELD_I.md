@@ -110,6 +110,110 @@ upper limit `Q = Z` corresponds to a fully stripped atom (zero density
 everywhere), which is correctly handled by the radial interpolator
 returning zero.
 
+### Precomputed anion references (`.rho`) and `WFCDIR`
+
+The extrapolation in path 3 keeps the added electron in the neutral
+atom's (compact) outermost orbital, so it under-estimates how diffuse a
+real anion is. To use *proper* anion references, point `WFCDIR` at a
+directory of radial-density files:
+
+```
+HIRSHFELD_I WFCDIR /path/to/proatoms
+```
+
+For each `(Z, q)` the code looks, in order, for
+`<elem>_q<+|->N.rho` then `<elem>_q<+|->N.wfc` in that directory
+(e.g. `o_q-1.rho`, `cl_q-2.rho`, `o_q+1.wfc`), using the trimmed
+lowercase element symbol. A `.rho` file is a spherically-averaged
+radial density:
+
+```
+# comment lines start with '#'
+<ngrid>
+<r_1>   <rho_1>      # r in bohr, rho in electrons/bohr^3
+...
+```
+on a logarithmic grid `r_i = a*exp(b*(i-1))`, read by
+`grid1_read_rho`. Files matching the current SCF charge bracket take
+precedence over the built-in cation table / extrapolation.
+
+**Generating the references.** `tools/wfc_generator/gen_anion_rho.py`
+produces these files using the standard HORTON-style approach: an
+isolated-atom DFT SCF in a *finite* Gaussian basis (which confines the
+otherwise-unbound extra electron of a semilocal-functional anion),
+followed by Lebedev × log-radial collocation of the all-electron
+density (`rho = phi^T D phi`) and angular averaging. It runs in the
+Psi4 environment:
+
+```
+python gen_anion_rho.py O -1 --lot PBE  --outdir rho_pbe
+python gen_anion_rho.py O -1 --lot PBE0 --outdir rho_pbe0
+```
+
+`tools/wfc_generator/batch_anions.sh` drives the full main-group
+H–Kr set (q=−1 for all; q=−2 for the p-block groups 13–16).
+Ready-made PBE/def2-TZVP and PBE0/def2-TZVP databases are shipped in
+`dat/hirshfeld_proatoms/{pbe,pbe0}/`.
+
+### Effect of real vs extrapolated anion references (water)
+
+PBE/def2-TZVP water density, same-level PBE/def2-TZVP O⁻ reference:
+
+| O⁻ reference                         | Q(O)   | Q(H)   |
+| ------------------------------------ | ------ | ------ |
+| extrapolation (compact)              | −0.729 | +0.365 |
+| real PBE/def2-TZVP (`.rho`, WFCDIR)  | −0.966 | +0.483 |
+
+The real O⁻ is ~18% more diffuse than neutral O (90%-enclosure radius
+2.26 vs 1.92 bohr), so it claims more density and drives a larger
+charge. This ~0.24 e shift is the quantitative case for using proper
+anion references instead of extrapolation.
+
+> **Consistency caveat.** The shipped neutral and cation references are
+> numerical scalar-relativistic PBE atoms (`ld1.x`, the existing
+> `dat/wfc` set), whereas these `.rho` anions are Gaussian-basis PBE
+> atoms. Interpolating across the `q=0` boundary therefore mixes two
+> density representations, and the absolute charge is sensitive to the
+> confining basis. Producing *all* charge states (cations, neutral,
+> anions) from one method — either fully in the Gaussian route, or via
+> confined numerical atomic DFT (Route 2, below) — is the clean fix.
+
+### Route 2: confined numerical atomic DFT (`ld1.x`)
+
+`tools/wfc_generator/gen_anion_rho_ld1.py` generates anion references
+with the **same numerical scalar-relativistic PBE method** (`ld1.x`,
+Quantum ESPRESSO) that produced critic2's shipped neutral/cation
+`dat/wfc` set — so neutral, cation, and anion references are all on one
+footing (no representation mixing across `q=0`).
+
+A free atomic anion is unbound for semilocal functionals: `ld1.x` with
+the default large box (`rmax=100`) reports *"convergence not achieved"*.
+The fix is **box confinement** — shrinking the radial box `rmax` until
+the extra electron binds. The generator steps `rmax` down
+(12 → 4 bohr for q=−1; 9 → 4 for q=−2) and keeps the first converged
+box. The density is built as `rho(r) = sum_i occ_i psi_i(r)^2/(4 pi r^2)`
+from the `ld1.x` orbitals, resampled to a log grid and written in the
+same `.rho` format. The confinement radius is the methodology knob
+(analogous to the basis set in Route 1).
+
+Ready-made database: `dat/hirshfeld_proatoms/ld1_pbe/` (main-group
+H–Kr, q=−1 for all, q=−2 where it binds). B²⁻ and C²⁻ are **not**
+included — they stay unbound even at tight confinement (doubly-charged
+anions of electropositive atoms have no bound free-ion limit).
+
+### Three-way comparison (water O, PBE)
+
+| O⁻ reference                         | Q(O)   | consistent with neutral? |
+| ------------------------------------ | ------ | ------------------------ |
+| extrapolation (compact)              | −0.729 | n/a (built from neutral) |
+| Route 1, Gaussian PBE/def2-TZVP      | −0.966 | no (Gaussian vs ld1)     |
+| Route 2, confined ld1.x PBE (rmax 12)| −0.877 | **yes** (same ld1 method)|
+
+Route 2 is method-consistent and lands between the compact
+extrapolation and the diffuse Gaussian anion; its value depends on the
+confinement radius, which Alberto may wish to standardize (e.g. a fixed
+multiple of the neutral atom's outer radius).
+
 ## Worked example — water
 
 Single-point B3LYP/6-31G(d) on H₂O, density cube generated with
@@ -172,8 +276,13 @@ amplification over plain Hirshfeld.
   - `read_db` no longer rejects `q < 0`.
   - New public wrapper `grid1_read_file(g, file, z, q)` so a caller
     can load a `.wfc` from an absolute path (used by `WFCDIR`).
-* `src/types.f90` — `basindat` gained `hi_wfcdir`, `hi_tol`,
-  `hi_maxit`.
+* `src/types.f90` — `basindat` gained the input fields `hi_wfcdir`,
+  `hi_tol`, `hi_maxit` and the per-integration SCF state
+  `hi_isactive`, `hi_qlo`, `hi_qhi`, `hi_frac`, `hi_qfinal`. The state
+  lives on `bas` (mirroring how YT keeps `bas%luw`); only the shared
+  `(Z, q) → grid1` memoisation cache is module-level in
+  `hirshfeld@proc.f90`, where it can stay warm across multiple
+  HIRSHFELD_I invocations like the neutral `agrid` table.
 * `dat/helpdoc/hirshfeld_i.keyw` — keyword syntax shown by the GUI
   help.
 
