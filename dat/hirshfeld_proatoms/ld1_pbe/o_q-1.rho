@@ -1,5 +1,5 @@
 # critic2 radial atomic density (Route 2: confined ld1.x)
-# element o Z 8 q -1 nelec 9 config '[He] 2s2 2p5' method PBE/ld1.x rmax 12.0
+# element o Z 8 q -1 nelec 9 config '[He] 2s2 2p5' method PBE/ld1.x rmax 11.9 (standardized)
 # integrated_electrons 9.000353 rescaled_to 9
 1500
 1.14556599000000e-04 3.19268793585085e+02

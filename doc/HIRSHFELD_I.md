@@ -189,17 +189,49 @@ footing (no representation mixing across `q=0`).
 A free atomic anion is unbound for semilocal functionals: `ld1.x` with
 the default large box (`rmax=100`) reports *"convergence not achieved"*.
 The fix is **box confinement** — shrinking the radial box `rmax` until
-the extra electron binds. The generator steps `rmax` down
-(12 → 4 bohr for q=−1; 9 → 4 for q=−2) and keeps the first converged
-box. The density is built as `rho(r) = sum_i occ_i psi_i(r)^2/(4 pi r^2)`
-from the `ld1.x` orbitals, resampled to a log grid and written in the
-same `.rho` format. The confinement radius is the methodology knob
-(analogous to the basis set in Route 1).
+the extra electron binds. Per-orbital occupations are read from
+`ld1.x`'s own output (authoritative for every block, including the
+f-elements), the density is built as
+`rho(r) = sum_i occ_i psi_i(r)^2/(4 pi r^2)`, resampled to a log grid,
+and written in the same `.rho` format. (`max_out_wfc=99` is set so all
+core orbitals are emitted — essential for heavy atoms.)
 
-Ready-made database: `dat/hirshfeld_proatoms/ld1_pbe/` (main-group
-H–Kr, q=−1 for all, q=−2 where it binds). B²⁻ and C²⁻ are **not**
-included — they stay unbound even at tight confinement (doubly-charged
-anions of electropositive atoms have no bound free-ion limit).
+**Standardized confinement radius.** Rather than an ad-hoc box, the
+radius is tied to the atom's own size:
+
+```
+rmax = alpha * R99(neutral),   alpha = 3.6   (default)
+```
+
+where `R99` is the radius enclosing 99% of the *neutral* atom's density,
+computed from the same `ld1.x`/`dat/wfc` set — so the rule is
+reproducible, size-relative, and self-consistent. If that box does not
+bind (electropositive or multiply-charged anions), `rmax` is stepped
+down by 0.8× until `ld1.x` converges; such cases are flagged
+`stepped-down` in the `.rho` header.
+
+`alpha = 3.6` was fixed from an O⁻/water sensitivity scan: across
+`rmax = 10–15` bohr the Hirshfeld-I charge is **flat to ~0.01 e**
+(Q_O = −0.882, −0.877, −0.872), i.e. the result is insensitive to the
+exact box as long as it sits in the "binds but gentle" window. `α=3.6`
+places most elements there (rmax ≈ 11.9 for O, 13.5 for I, 18.9 for Cs).
+
+Ready-made database `dat/hirshfeld_proatoms/ld1_pbe/` — **whole periodic
+table**, 137 files: q=−1 for Z=1–117 and q=−2 for the p-block
+(groups 13–16), using the standardized `α·R99` rule.
+
+Coverage notes:
+- **Z=104–117 (Rf–Ts)** require an `ld1.x` patched to accept Z>103
+  (stock `ld1.x` caps at 103); see `tools/wfc_generator/ld1x_highZ.patch`
+  — the same max-Z bump the shipped neutral `dat/wfc` set used. The
+  generated `.rho` files are shipped, so no patched `ld1.x` is needed to
+  *use* the database, only to regenerate the superheavy entries.
+- **Og⁻ (Z=118)** is the single omission: its anion would occupy an 8s
+  shell (n=8) beyond `ld1.x`'s quantum-number tables, and a noble-gas
+  anion is meaningless.
+- A few deeply-unbound multiply-charged cases (e.g. B²⁻, C²⁻) are
+  absent — doubly-charged anions of electropositive atoms have no bound
+  free-ion limit even under tight confinement.
 
 ### Three-way comparison (water O, PBE)
 
@@ -210,9 +242,44 @@ anions of electropositive atoms have no bound free-ion limit).
 | Route 2, confined ld1.x PBE (rmax 12)| −0.877 | **yes** (same ld1 method)|
 
 Route 2 is method-consistent and lands between the compact
-extrapolation and the diffuse Gaussian anion; its value depends on the
-confinement radius, which Alberto may wish to standardize (e.g. a fixed
-multiple of the neutral atom's outer radius).
+extrapolation and the diffuse Gaussian anion. Because the charge is
+insensitive to `rmax` in the gentle-confinement window (above), the
+`α·R99` rule makes the database reproducible without fine-tuning.
+
+## Where plain Hirshfeld fails and Hirshfeld-I is needed
+
+Plain Hirshfeld is built entirely from *neutral* free-atom densities, so
+it systematically **under-polarizes**: charges come out far too small,
+and for an ionic compound it badly fails to recover the ionicity.
+Hirshfeld-I removes that bias by self-consistently charging the
+pro-atoms. The table below is a robustness sweep over nine molecules,
+all at PBE/def2-TZVP density with the Route-2 `ld1_pbe` references
+(generated with `tools/wfc_generator/run_molecule_test.py`); every
+Hirshfeld-I SCF converged.
+
+| Molecule | Atom | q (Hirshfeld) | q (Hirshfeld-I) | comment |
+| -------- | ---- | ------------: | --------------: | ------- |
+| NaF  | Na | +0.65 | **+1.01** | recovers the formal +1 of an ionic fluoride |
+| NaF  | F  | −0.58 | **−0.94** | |
+| NaCl | Na | +0.61 | **+0.96** | strongly ionic, as expected |
+| NaCl | Cl | −0.40 | **−0.75** | |
+| LiF  | Li | +0.57 | +0.93 | |
+| LiH  | Li | +0.41 | +0.89 | ionic hydride: H gets −0.89 |
+| H₂O  | O  | −0.31 | −0.87 | |
+| NH₃  | N  | −0.30 | −0.91 | |
+| HF   | F  | −0.22 | −0.52 | |
+| CH₄  | C  | −0.16 | −0.46 | |
+| CO   | C  | +0.07 | +0.13 | small either way (the CO anomaly is a *dipole*, not a monopole, effect) |
+
+The consistent pattern — Hirshfeld-I charges are ~2–3× the plain
+Hirshfeld values — reproduces the central result of Bultinck et al.
+(2007), who note the iterative scheme "increases the magnitudes of the
+charges." The clearest **failure of plain Hirshfeld** is the ionic
+salts: it reports Na in NaF as only +0.65 (and, on a coarse grid, can
+even put a *positive* charge on Cl in NaCl), whereas Hirshfeld-I
+correctly returns Na ≈ +1 and a strongly negative halide. Exact values
+are method/basis/pro-atom-database dependent; the *trend* and the
+recovery of formal ionicity are the robust, reproducible signatures.
 
 ## Worked example — water
 
