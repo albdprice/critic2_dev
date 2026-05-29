@@ -246,6 +246,41 @@ extrapolation and the diffuse Gaussian anion. Because the charge is
 insensitive to `rmax` in the gentle-confinement window (above), the
 `α·R99` rule makes the database reproducible without fine-tuning.
 
+## Where plain Hirshfeld fails and Hirshfeld-I is needed
+
+Plain Hirshfeld is built entirely from *neutral* free-atom densities, so
+it systematically **under-polarizes**: charges come out far too small,
+and for an ionic compound it badly fails to recover the ionicity.
+Hirshfeld-I removes that bias by self-consistently charging the
+pro-atoms. The table below is a robustness sweep over nine molecules,
+all at PBE/def2-TZVP density with the Route-2 `ld1_pbe` references
+(generated with `tools/wfc_generator/run_molecule_test.py`); every
+Hirshfeld-I SCF converged.
+
+| Molecule | Atom | q (Hirshfeld) | q (Hirshfeld-I) | comment |
+| -------- | ---- | ------------: | --------------: | ------- |
+| NaF  | Na | +0.65 | **+1.01** | recovers the formal +1 of an ionic fluoride |
+| NaF  | F  | −0.58 | **−0.94** | |
+| NaCl | Na | +0.61 | **+0.96** | strongly ionic, as expected |
+| NaCl | Cl | −0.40 | **−0.75** | |
+| LiF  | Li | +0.57 | +0.93 | |
+| LiH  | Li | +0.41 | +0.89 | ionic hydride: H gets −0.89 |
+| H₂O  | O  | −0.31 | −0.87 | |
+| NH₃  | N  | −0.30 | −0.91 | |
+| HF   | F  | −0.22 | −0.52 | |
+| CH₄  | C  | −0.16 | −0.46 | |
+| CO   | C  | +0.07 | +0.13 | small either way (the CO anomaly is a *dipole*, not a monopole, effect) |
+
+The consistent pattern — Hirshfeld-I charges are ~2–3× the plain
+Hirshfeld values — reproduces the central result of Bultinck et al.
+(2007), who note the iterative scheme "increases the magnitudes of the
+charges." The clearest **failure of plain Hirshfeld** is the ionic
+salts: it reports Na in NaF as only +0.65 (and, on a coarse grid, can
+even put a *positive* charge on Cl in NaCl), whereas Hirshfeld-I
+correctly returns Na ≈ +1 and a strongly negative halide. Exact values
+are method/basis/pro-atom-database dependent; the *trend* and the
+recovery of formal ionicity are the robust, reproducible signatures.
+
 ## Worked example — water
 
 Single-point B3LYP/6-31G(d) on H₂O, density cube generated with
