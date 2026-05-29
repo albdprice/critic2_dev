@@ -176,8 +176,43 @@ anion references instead of extrapolation.
 > density representations, and the absolute charge is sensitive to the
 > confining basis. Producing *all* charge states (cations, neutral,
 > anions) from one method — either fully in the Gaussian route, or via
-> confined numerical atomic DFT (a "Route 2" that matches the existing
-> `ld1.x` set) — is the clean long-term fix.
+> confined numerical atomic DFT (Route 2, below) — is the clean fix.
+
+### Route 2: confined numerical atomic DFT (`ld1.x`)
+
+`tools/wfc_generator/gen_anion_rho_ld1.py` generates anion references
+with the **same numerical scalar-relativistic PBE method** (`ld1.x`,
+Quantum ESPRESSO) that produced critic2's shipped neutral/cation
+`dat/wfc` set — so neutral, cation, and anion references are all on one
+footing (no representation mixing across `q=0`).
+
+A free atomic anion is unbound for semilocal functionals: `ld1.x` with
+the default large box (`rmax=100`) reports *"convergence not achieved"*.
+The fix is **box confinement** — shrinking the radial box `rmax` until
+the extra electron binds. The generator steps `rmax` down
+(12 → 4 bohr for q=−1; 9 → 4 for q=−2) and keeps the first converged
+box. The density is built as `rho(r) = sum_i occ_i psi_i(r)^2/(4 pi r^2)`
+from the `ld1.x` orbitals, resampled to a log grid and written in the
+same `.rho` format. The confinement radius is the methodology knob
+(analogous to the basis set in Route 1).
+
+Ready-made database: `dat/hirshfeld_proatoms/ld1_pbe/` (main-group
+H–Kr, q=−1 for all, q=−2 where it binds). B²⁻ and C²⁻ are **not**
+included — they stay unbound even at tight confinement (doubly-charged
+anions of electropositive atoms have no bound free-ion limit).
+
+### Three-way comparison (water O, PBE)
+
+| O⁻ reference                         | Q(O)   | consistent with neutral? |
+| ------------------------------------ | ------ | ------------------------ |
+| extrapolation (compact)              | −0.729 | n/a (built from neutral) |
+| Route 1, Gaussian PBE/def2-TZVP      | −0.966 | no (Gaussian vs ld1)     |
+| Route 2, confined ld1.x PBE (rmax 12)| −0.877 | **yes** (same ld1 method)|
+
+Route 2 is method-consistent and lands between the compact
+extrapolation and the diffuse Gaussian anion; its value depends on the
+confinement radius, which Alberto may wish to standardize (e.g. a fixed
+multiple of the neutral atom's outer radius).
 
 ## Worked example — water
 
