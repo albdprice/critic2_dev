@@ -890,3 +890,33 @@ free-atom α (e.g. H 4.5, Ne 2.67, Ar 11.1 a₀³) before trusting ion values.
 This is a standalone numerical build (tool in `tools/wfc_generator/`,
 producing an α(Z,q) table critic2 ingests like the GB table) — the dedicated
 next work item (task #42).
+
+### 2026-05-30r — Sternheimer 2C solver built + validated (commit 17aef259)
+Built `tools/wfc_generator/gen_ion_alpha_sternheimer.py` — offline generator:
+ld1.x AE calc → orbitals `P_nl`(ld1.wfc) + eigenvalues/occ (stdout) →
+reconstruct `V(r)` by inverting the radial KS equation (multi-orbital,
+max-|P|; exact ld1 SCF potential, no XC re-eval) → solve the uncoupled
+radial Sternheimer ODE per (n,l)→l±1 (non-uniform 3-point FD tridiagonal,
+Dirichlet/box BCs) → `α=(2/3)Σ occ·A(l,l')·∫P r w dr`. scipy `solve_banded`.
+
+**Validation (the key result):** the *uncoupled* solve overestimates
+*absolute* α — H 7.05 (vs 4.5; also SIE-inflated), He 1.73 (1.38),
+Ne 3.51 (2.67), Ar 17.8 (11.1) — exactly the expected uncoupled-vs-coupled
+gap (no self-consistent depolarization field; element-dependent). **But as a
+neutral-calibrated RATIO it reproduces the Gould–Bučko TDDFT charge trend**:
+- cations (compact, confinement-insensitive) match almost exactly:
+  **Li⁺/Li⁰ 0.0012 vs GB 0.0012; Na⁺/Na⁰ 0.0067 vs GB 0.0057.**
+- anions right-signed but **confinement(rmax)-dependent**: F⁻/F⁰ 2.28 (GB
+  4.17), Cl⁻/Cl⁰ 2.41 (GB 2.06), O⁻/O⁰ 2.73 (GB 1.04) at rmax=12. This is the
+  genuinely-uncertain "reference-atom" quantity (Erin): GB use frozen-orbital
+  free anions, we use box-confined — they legitimately differ. For 2C use OUR
+  confined α at the **same standardized rmax (3.6·R99)** as the density/volume
+  references → one self-consistent method.
+
+So the uncoupled Sternheimer is a sound *ratio* estimator (more physical than
+Kirkwood; cation-exact vs GB). Absolute accuracy would need the coupled
+(TDDFT) solve — not required since we calibrate to the neutral.
+- **Next:** batch over elements at standardized rmax → embed an α(Z,q) table
+  (like the GB arrays) and wire as the rigorous 2C reference (replacing/
+  augmenting the inline Kirkwood). Minor harness fix: robust stdout-occupation
+  parse; `ok` now keys off "reached in" not the fragile "convergence" string.
