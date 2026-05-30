@@ -82,6 +82,7 @@ contains
     integer :: lp
     real*8 :: a1, a2, chf
     logical :: ok, dohi, himoments, dovolref
+    integer :: ialpharef
 
     ! header
     write (uout,'("* Exchange-hole dipole moment (XDM) dispersion calculation ")')
@@ -137,7 +138,7 @@ contains
        endif
 
        ! optional charge-aware (Hirshfeld-I) partitioning (research option)
-       dohi = .false.; himoments = .true.; hi_wfcdir = ""; dovolref = .false.
+       dohi = .false.; himoments = .true.; hi_wfcdir = ""; dovolref = .false.; ialpharef = 0
        do while (.true.)
           word = lgetword(line,lp)
           if (equal(word,"hirshfeld_i").or.equal(word,"hi")) then
@@ -146,6 +147,13 @@ contains
              himoments = .false.
           elseif (equal(word,"volref").and.dohi) then
              dovolref = .true.
+          elseif (equal(word,"alpharef").and.dohi) then
+             word = lgetword(line,lp)
+             if (equal(word,"gould").or.equal(word,"fi")) then
+                ialpharef = 1   ! Stage 2A: Gould-Bucko tabulated ion alpha, FI-faithful
+             else
+                call ferror("xdm_driver","unknown ALPHAREF mode: "//word,faterr,line,syntax=.true.)
+             end if
           elseif (equal(word,"wfcdir").and.dohi) then
              hi_wfcdir = getword(line,lp)
              if (len_trim(hi_wfcdir) == 0) &
@@ -157,7 +165,7 @@ contains
           end if
        end do
 
-       call xdm_wfn(a1,a2,chf,dohi,himoments,hi_wfcdir,dovolref)
+       call xdm_wfn(a1,a2,chf,dohi,himoments,hi_wfcdir,dovolref,ialpharef)
     end if
 
   end subroutine xdm_driver
@@ -1267,7 +1275,7 @@ contains
 
 
   !> Calculate XDM in molecules and crystals using the wavefunction.
-  subroutine xdm_wfn(a1o,a2o,chf,dohi,himoments,hi_wfcdir,dovolref)
+  subroutine xdm_wfn(a1o,a2o,chf,dohi,himoments,hi_wfcdir,dovolref,ialpharef)
     use systemmod, only: sy
     use meshmod, only: mesh
     use fieldmod, only: type_wfn, type_dftb
@@ -1282,6 +1290,7 @@ contains
     logical, intent(in), optional :: dohi, himoments
     character(len=*), intent(in), optional :: hi_wfcdir
     logical, intent(in), optional :: dovolref
+    integer, intent(in), optional :: ialpharef   ! 0=none, 1=Gould-Bucko FI (Stage 2A)
 
     type(xdmparams) :: p
     type(mesh) :: m
@@ -1289,10 +1298,11 @@ contains
     integer :: prop(7), i, j, lu, luh, iz, iter, k
     real*8 :: rho, rhop, rhopp, x(3), r, a1, a2, nn, rb
     real*8 :: dum1(3), dum2(3,3), dqmax, ni, wmom, wvol, refh
-    real*8 :: vf0, vfq, rmidv, hv, qv, rr, rwv, apol0, apolq
+    real*8 :: vf0, vfq, rmidv, hv, qv, rr, rwv, apol0, apolq, afi
     real*8, allocatable :: mm(:,:), v(:), qcel(:), qnew(:), phihi(:), prneu(:), qflo(:)
-    real*8, allocatable :: volscal(:)
+    real*8, allocatable :: volscal(:), atpolov(:)
     logical :: lhi, lhimom, lvolref
+    integer :: lalpharef
     character(len=:), allocatable :: wfcdir
     integer, parameter :: hi_maxit = 120
     real*8, parameter :: hi_tol = 1d-4
@@ -1311,6 +1321,7 @@ contains
     ! allocate space for the calculations
     allocate(mm(3,sy%c%ncel),v(sy%c%ncel))
     allocate(volscal(sy%c%ncel)); volscal = 1d0   ! Stage-1 polarizability denominator scale
+    allocate(atpolov(sy%c%ncel)); atpolov = -1d0  ! Stage-2 per-atom polarizability override (<=0 => default)
     allocate(p%c6(sy%c%ncel,sy%c%ncel),p%c8(sy%c%ncel,sy%c%ncel),p%c10(sy%c%ncel,sy%c%ncel))
     allocate(p%rvdw(sy%c%ncel,sy%c%ncel))
 
@@ -1374,6 +1385,7 @@ contains
     lhi = .false.; if (present(dohi)) lhi = dohi
     lhimom = .true.; if (present(himoments)) lhimom = himoments
     lvolref = .false.; if (present(dovolref)) lvolref = dovolref
+    lalpharef = 0; if (present(ialpharef)) lalpharef = ialpharef
     wfcdir = ""; if (present(hi_wfcdir)) wfcdir = trim(hi_wfcdir)
 
     nelec = 0
@@ -1563,10 +1575,21 @@ contains
        ! when paired with the correspondingly small/large alpha_free(Q).
        ! VOLREF on its own therefore moves both ions the "wrong" way and is
        ! intended as the architecture/diagnostic for the full FI model.
-       if (lvolref) then
+       ! Stage 2A (ALPHAREF GOULD): FI-faithful charge-matched polarizability
+       ! alpha = alpha_FI(Q) * V_AIM / V_free(Q), with alpha_FI(Q) the
+       ! Gould-Bucko ion polarizability (ion_alpha0, linear-in-N interp) and
+       ! V_free(Q) the charge-matched reference volume. This is the physical
+       ! pairing the volume-only VOLREF lacks.
+       if (lvolref .or. lalpharef > 0) then
           call hirsh_i_prepare(sy,qcel,wfcdir)
-          write (uout,'("+ Stage 1 (VOLREF): charge-matched reference volumes")')
-          write (uout,'("# i At      V_AIM         V_free(0)     V_free(Q)     VfQ/Vf0      a_neutscal    a_volref")')
+          if (lvolref) then
+             write (uout,'("+ Stage 1 (VOLREF): charge-matched reference volumes")')
+             write (uout,'("# i At      V_AIM         V_free(0)     V_free(Q)     VfQ/Vf0      a_neutscal    a_volref")')
+          end if
+          if (lalpharef == 1) then
+             write (uout,'("+ Stage 2A (ALPHAREF GOULD): FI-faithful polarizabilities (a0^3)")')
+             write (uout,'("# i At      Q             a_neutscal    a_FI(Q)       alpha_AIM")')
+          end if
           do i = 1, sy%c%ncel
              iz = sy%c%spc(sy%c%atcel(i)%is)%z
              if (iz < 1) cycle
@@ -1581,18 +1604,30 @@ contains
                 vfq = vfq + hirsh_i_refrho(iz,qcel(i),rr) * rwv * rr**3
              enddo
              if (vf0 > 1d-30) volscal(i) = vfq/vf0
-             ! neutral-scaling vs volume-charge-matched polarizability (au)
-             apol0 = v(i) * alpha_free(iz) / frevol(iz,chf)
-             apolq = apol0 / volscal(i)
-             write (uout,'(I3,X,A,X,1p,6(E13.6,X))') i, string(nameguess(iz,.true.)), &
-                v(i), vf0, vfq, volscal(i), apol0, apolq
+             apol0 = v(i) * alpha_free(iz) / frevol(iz,chf)  ! neutral-scaling (au)
+             if (lvolref) then
+                apolq = apol0 / volscal(i)
+                write (uout,'(I3,X,A,X,1p,6(E13.6,X))') i, string(nameguess(iz,.true.)), &
+                   v(i), vf0, vfq, volscal(i), apol0, apolq
+             end if
+             if (lalpharef == 1) then
+                afi = ion_alpha0(iz,qcel(i))
+                if (afi > 0d0 .and. vfq > 1d-30) then
+                   atpolov(i) = afi * v(i) / vfq          ! alpha_FI(Q) * V_AIM / V_free(Q)
+                   write (uout,'(I3,X,A,X,1p,4(E13.6,X))') i, string(nameguess(iz,.true.)), &
+                      qcel(i), apol0, afi, atpolov(i)
+                else
+                   write (uout,'(I3,X,A,X,1p,2(E13.6,X),A)') i, string(nameguess(iz,.true.)), &
+                      qcel(i), apol0, "  (no GB datum; neutral-scaling used)"
+                end if
+             end if
           enddo
        end if
        call hirsh_i_cache_clean()
     end if
 
     ! calculate and print out coefficients
-    call calc_coefs(a1,a2,chf,v,mm,p%c6,p%c8,p%c10,p%rvdw,volscal)
+    call calc_coefs(a1,a2,chf,v,mm,p%c6,p%c8,p%c10,p%rvdw,volscal,atpolov)
 
     ! calculate and output energy and derivatives
     call calc_edisp(p)
@@ -2070,7 +2105,39 @@ contains
   !> volumes and moments (v, mm) and the damping function parameters
   !> (a1, a2, chf). Print out the calculated values. Works for
   !> molecules and crystals.
-  subroutine calc_coefs(a1,a2,chf,v,mm,c6,c8,c10,rvdw,volscal)
+  !> Static dipole polarizability (a0^3) of element iz at real charge q,
+  !> linearly interpolated in electron number between the bracketing integer
+  !> charge states of the Gould-Bucko 2016 benchmark set (Stage 2A,
+  !> FI-faithful). Returns 0 if the neutral datum is missing (caller then
+  !> falls back to the neutral-scaling polarizability). q is clamped to
+  !> [-1,+1] (the tabulated range); a missing ion endpoint falls back to the
+  !> neutral value (no charge correction for that side).
+  function ion_alpha0(iz,q) result(a)
+    use param, only: alpha_gb_m1, alpha_gb_0, alpha_gb_p1, maxzat0
+    integer, intent(in) :: iz
+    real*8, intent(in) :: q
+    real*8 :: a
+
+    real*8 :: qc, a0, aend, f
+
+    a = 0d0
+    if (iz < 1 .or. iz > maxzat0) return
+    a0 = alpha_gb_0(iz)
+    if (a0 <= 0d0) return
+    qc = min(max(q,-1d0),1d0)
+    if (qc >= 0d0) then
+       aend = alpha_gb_p1(iz)          ! q = +1
+       if (aend <= 0d0) aend = a0      ! no cation datum: no correction
+       f = qc
+    else
+       aend = alpha_gb_m1(iz)          ! q = -1
+       if (aend <= 0d0) aend = a0
+       f = -qc
+    end if
+    a = (1d0-f)*a0 + f*aend
+  end function ion_alpha0
+
+  subroutine calc_coefs(a1,a2,chf,v,mm,c6,c8,c10,rvdw,volscal,atpolov)
     use systemmod, only: sy
     use tools_io, only: uout, string
     use param, only: alpha_free
@@ -2080,6 +2147,7 @@ contains
     real*8, intent(out) :: c6(sy%c%ncel,sy%c%ncel), c8(sy%c%ncel,sy%c%ncel)
     real*8, intent(out) :: c10(sy%c%ncel,sy%c%ncel), rvdw(sy%c%ncel,sy%c%ncel)
     real*8, intent(in), optional :: volscal(sy%c%ncel)  ! Stage-1 charge-matched volume denominator scale
+    real*8, intent(in), optional :: atpolov(sy%c%ncel)  ! Stage-2 per-atom polarizability override (a0^3); <=0 => use default
 
     integer :: i, j
     integer :: iz
@@ -2098,6 +2166,12 @@ contains
     do i = 1, sy%c%ncel
        iz = sy%c%spc(sy%c%atcel(i)%is)%z
        if (iz < 1) cycle
+       if (present(atpolov)) then
+          if (atpolov(i) > 0d0) then
+             atpol(i) = atpolov(i)     ! Stage-2 FI-faithful: alpha_FI(Q)*V_AIM/V_free(Q)
+             cycle
+          end if
+       end if
        vs = 1d0
        if (present(volscal)) vs = volscal(i)
        atpol(i) = v(i) * alpha_free(iz) / (frevol(iz,chf) * vs)

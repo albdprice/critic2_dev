@@ -256,6 +256,80 @@ module param
         -999d0,    -999d0,& ! 117-118
         -999d0,    -999d0,    -999d0,    -999d0,    -999d0/) / .52917720859d0**3 ! 119-124
 
+  ! Static dipole polarizabilities alpha(0) of free ions and atoms, in a0^3
+  ! (already atomic units, NOT divided by the Ang->bohr factor above). From
+  ! the "benchmark" set of Gould & Bucko, J. Chem. Theory Comput. 12, 4644
+  ! (2016) [arXiv:1604.02751], TDDFT, rows 1-6. Used by the FI-faithful
+  ! charge-aware XDM (Stage 2A): alpha_free(Q) is linearly interpolated in
+  ! electron number between the bracketing integer charge states. 0d0 marks
+  ! a species not tabulated. Provenance file: dat/xdm_ion_alpha_gould_bucko_2016.dat
+  real*8, parameter :: alpha_gb_m1(1:maxzat0) = (/&
+      216d0, 0d0, 1180d0, 0d0, 32.9d0, 15.5d0,&
+      8.04d0, 5.4d0, 15d0, 0d0, 1310d0, 0d0,&
+      109d0, 59.6d0, 33.7d0, 24.1d0, 30.3d0, 0d0,&
+      2090d0, 0d0, 134d0, 110d0, 94.5d0, 83.5d0,&
+      74.7d0, 66.5d0, 59.8d0, 54.2d0, 500d0, 845d0,&
+      103d0, 63.3d0, 40d0, 31.7d0, 42.8d0, 0d0,&
+      2110d0, 0d0, 175d0, 134d0, 114d0, 100d0,&
+      90.6d0, 82.4d0, 75.9d0, 70.5d0, 501d0, 863d0,&
+      133d0, 89.1d0, 59.6d0, 49.1d0, 61.7d0, 0d0,&
+      2480d0, 0d0, 729d0, 4.02d0, 4.88d0, 5.57d0,&
+      6.5d0, 7.38d0, 8.08d0, 8.08d0, 9.84d0, 10.5d0,&
+      11.1d0, 11.6d0, 12d0, 0d0, 13.8d0, 236d0,&
+      206d0, 295d0, 368d0, 378d0, 381d0, 383d0,&
+      387d0, 0d0, 356d0, 135d0, 103d0, 73.1d0,&
+      54.5d0, 0d0, 0d0, 0d0, 0d0, 0d0,&
+      0d0, 0d0, 0d0, 0d0, 0d0, 0d0,&
+      0d0, 0d0, 0d0, 0d0, 0d0, 0d0,&
+      0d0, 0d0, 0d0, 0d0, 0d0, 0d0,&
+      0d0, 0d0, 0d0, 0d0, 0d0, 0d0,&
+      0d0, 0d0, 0d0, 0d0, 0d0, 0d0,&
+      0d0, 0d0, 0d0 /)
+  real*8, parameter :: alpha_gb_0(1:maxzat0) = (/&
+      4.5d0, 1.38d0, 164d0, 37.7d0, 20.5d0, 11.7d0,&
+      7.25d0, 5.2d0, 3.6d0, 2.67d0, 163d0, 71.4d0,&
+      57.5d0, 37d0, 24.8d0, 19.5d0, 14.7d0, 11.1d0,&
+      290d0, 160d0, 123d0, 102d0, 87.3d0, 78.4d0,&
+      66.8d0, 60.4d0, 53.9d0, 48.4d0, 41.7d0, 38.4d0,&
+      52.1d0, 40.2d0, 29.6d0, 26.2d0, 21.6d0, 16.8d0,&
+      317d0, 198d0, 163d0, 112d0, 97.9d0, 87.1d0,&
+      79.6d0, 72.3d0, 66.4d0, 61.7d0, 46.2d0, 46.7d0,&
+      62.1d0, 60d0, 44d0, 40d0, 33.6d0, 27.2d0,&
+      396d0, 278d0, 214d0, 205d0, 216d0, 209d0,&
+      200d0, 192d0, 184d0, 158d0, 170d0, 163d0,&
+      156d0, 150d0, 144d0, 139d0, 137d0, 83.7d0,&
+      73.9d0, 65.8d0, 60.2d0, 55.3d0, 51.3d0, 48d0,&
+      45.4d0, 33.5d0, 51.4d0, 47.9d0, 43.2d0, 36.1d0,&
+      30.4d0, 32.2d0, 0d0, 0d0, 0d0, 0d0,&
+      0d0, 0d0, 0d0, 0d0, 0d0, 0d0,&
+      0d0, 0d0, 0d0, 0d0, 0d0, 0d0,&
+      0d0, 0d0, 0d0, 0d0, 0d0, 0d0,&
+      0d0, 0d0, 0d0, 0d0, 0d0, 0d0,&
+      0d0, 0d0, 0d0, 0d0, 0d0, 0d0,&
+      0d0, 0d0, 0d0 /)
+  real*8, parameter :: alpha_gb_p1(1:maxzat0) = (/&
+      0d0, 0.294d0, 0.193d0, 24.5d0, 9.67d0, 5.66d0,&
+      3.68d0, 2.55d0, 1.78d0, 1.44d0, 0.93d0, 35d0,&
+      19.6d0, 18.2d0, 14.3d0, 11.9d0, 9.27d0, 7.28d0,&
+      5.05d0, 75.5d0, 60d0, 44.6d0, 36.5d0, 38.2d0,&
+      25.8d0, 23.2d0, 20.6d0, 18.4d0, 17.6d0, 17.9d0,&
+      15.2d0, 18.5d0, 16.4d0, 15.7d0, 13.6d0, 11.1d0,&
+      8.32d0, 90.2d0, 88.1d0, 62d0, 55.3d0, 47.6d0,&
+      32.7d0, 37.9d0, 34.4d0, 31.5d0, 20d0, 23.1d0,&
+      20.2d0, 29.2d0, 25.5d0, 25.1d0, 22.1d0, 18.7d0,&
+      15d0, 121d0, 94.2d0, 89.1d0, 93.4d0, 89.6d0,&
+      85.7d0, 81.8d0, 78.1d0, 67.2d0, 71.8d0, 68.6d0,&
+      65.8d0, 63d0, 60.4d0, 58d0, 74.6d0, 47.5d0,&
+      42d0, 37.1d0, 33.4d0, 30.4d0, 27.9d0, 25.8d0,&
+      24d0, 17.5d0, 17d0, 23.5d0, 25.2d0, 22.9d0,&
+      20.2d0, 22.4d0, 0d0, 0d0, 0d0, 0d0,&
+      0d0, 0d0, 0d0, 0d0, 0d0, 0d0,&
+      0d0, 0d0, 0d0, 0d0, 0d0, 0d0,&
+      0d0, 0d0, 0d0, 0d0, 0d0, 0d0,&
+      0d0, 0d0, 0d0, 0d0, 0d0, 0d0,&
+      0d0, 0d0, 0d0, 0d0, 0d0, 0d0,&
+      0d0, 0d0, 0d0 /)
+
   ! factorials
   integer, parameter :: mfact = 30  !< factorial vector size
   real*8, dimension(0:mfact) :: fact(0:mfact) !< factorial vector, fact(n) = n!
