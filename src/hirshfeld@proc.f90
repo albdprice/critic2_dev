@@ -262,7 +262,7 @@ contains
     integer :: nca, iat, iter, i1, i2, i3, ii, iz, isp
     integer :: nat
     integer, allocatable :: nid(:), lvec(:,:)
-    real*8, allocatable :: dist(:), rcutmax(:,:), qflo(:)
+    real*8, allocatable :: dist(:), rcutmax(:,:), qflo(:), zval(:)
     real*8, allocatable :: nelec(:), vat(:), qprev(:)
     real*8 :: x0(3), xdelta(3,3), rho_i, rho_promol, dQ, dQmax, fac, qraw
     real*8 :: rho_lo, rho_hi
@@ -282,7 +282,7 @@ contains
     ! allocate / reset SCF state on bas (mirrors how YT stores bas%luw)
     call hirsh_i_cleanup(bas)
     allocate(bas%hi_qlo(nca), bas%hi_qhi(nca), bas%hi_frac(nca), bas%hi_qfinal(nca))
-    allocate(nelec(nca), vat(nca), qprev(nca), qflo(nca))
+    allocate(nelec(nca), vat(nca), qprev(nca), qflo(nca), zval(nca))
     bas%hi_qlo = 0
     bas%hi_qhi = 0
     bas%hi_frac = 0d0
@@ -294,10 +294,23 @@ contains
     if (allocated(bas%hi_wfcdir)) then
        if (len_trim(bas%hi_wfcdir) > 0) wfcdir = trim(bas%hi_wfcdir)
     end if
+    ! reference electron count for the charge: the pseudopotential valence
+    ! (ZPSP) when the reference density is a valence (pseudo) density, else
+    ! the atomic number (all-electron density). Q = zval - N_partitioned is
+    ! then the physical (valence) charge transfer; the frozen spherical core
+    ! does not partition, and the smooth valence density integrates cleanly
+    ! on the coarse grid (the all-electron core cusp does not).
     do iat = 1, nca
        iz = s%c%spc(s%c%atcel(iat)%is)%z
-       if (iz < 1) then; qflo(iat) = 0d0; cycle; end if
+       if (iz < 1) then; qflo(iat) = 0d0; zval(iat) = 0d0; cycle; end if
        qflo(iat) = hirsh_i_qfloor(iz,wfcdir)
+       zval(iat) = real(iz,8)
+       if (s%f(s%iref)%usecore) then
+          if (allocated(s%f(s%iref)%zpsp)) then
+             if (s%f(s%iref)%zpsp(s%c%atcel(iat)%is) > 0) &
+                zval(iat) = real(s%f(s%iref)%zpsp(s%c%atcel(iat)%is),8)
+          end if
+       end if
     end do
 
     ! grid step vectors
@@ -382,7 +395,7 @@ contains
        dQmax = 0d0
        do iat = 1, nca
           iz = s%c%spc(s%c%atcel(iat)%is)%z
-          qraw = real(iz,8) - nelec(iat)               ! bare HI update
+          qraw = zval(iat) - nelec(iat)                ! bare HI update (Q = zval - N)
           dQ = abs(qraw - qprev(iat))                  ! residual (convergence measure)
           if (dQ > dQmax) dQmax = dQ
           ! damp, then clamp to [qflo, iz-1d-3]: the element-dependent anion
@@ -419,7 +432,7 @@ contains
     end if
     write (uout,*)
 
-    deallocate(nelec,vat,qprev,qflo)
+    deallocate(nelec,vat,qprev,qflo,zval)
     if (allocated(rcutmax)) deallocate(rcutmax)
 
   end subroutine hirsh_i_driver
