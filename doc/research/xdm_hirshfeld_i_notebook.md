@@ -1135,3 +1135,46 @@ charge-aware grid XDM end-to-end (commit 3af1f21f).
      probed path; likely a trim/case/dirsep mismatch.
 Both are isolated; once fixed, expect NaCl Na≈+0.8/Cl≈−0.8. Molecular path
 (5 routes) + default XDM unaffected; regression green.
+
+### 2026-05-30z — SOLID charge-aware XDM WORKING (NaCl); the two #47 bugs resolved
+The solid grid-HI now gives physical charges and the full charge-aware
+dispersion. Resolution (commit 7988d631):
+- **Root cause:** the HI *population* integral needs a density that
+  integrates cleanly on the coarse uniform grid. All-electron does NOT
+  (QE pp.x plot_num=17 loses the core → 16e; reconstructed AE = valence+core
+  re-introduces the core CUSP → over-integrates, 34≠28). Same §f aliasing,
+  in the core.
+- **Fix:** integrate the SMOOTH valence (pseudo) density and take the charge
+  relative to the pseudo valence: `Q = ZPSP − ∫w·ρ_valence`. That is exactly
+  the physical (valence) charge transfer (the frozen spherical core does not
+  partition), and the valence density has no cusp. `hirsh_i_driver` reads
+  ZPSP from the reference field (zval = ZPSP if usecore else Z). Reverted the
+  AE-reconstruction reference-swap. The "qfloor=0" symptom was a *test-script*
+  bug (unexpanded `$WFC`), not code.
+
+**NaCl rocksalt (QE 7.2 PBE PAW, a=10.6577 bohr; `xdm grid … hirshfeld_i
+alpharef …`):** charges **Na +1.02 / Cl −1.00** (Cl at the q=−1 floor — bulk
+NaCl is strongly ionic, more so than the gas molecule's ±0.89, and there is
+no Cl²⁻ ref). Charge-aware α (a₀³): **α(Na) 10.9 → 1.06** (Na⁺ collapse),
+**α(Cl) 26.5 → 34.6** (Cl⁻ expansion). Lattice-summed dispersion energy
+Evdw per cell (mHa):
+
+| neutral | 2A gould | 2B scale | 2C stern |
+|---|---|---|---|
+| −33.2 | −16.7 | −15.9 | −11.9 |
+
+**Charge-aware references roughly HALVE the bulk-NaCl XDM dispersion** — the
+neutral-Hirshfeld XDM massively over-counts the cation's contribution (neutral
+Na α ~ shell of valence; Na⁺ ~ 1 a₀³). This is the large ionic-solid effect
+the FI work reported, now reproduced in critic2. (Note: the grid HI SCF
+clamps Cl at −1 and reports non-convergence at that boundary — the physical
+limit for NaCl; the charges are stable. "Better"-ness awaits cohesive-energy
+vs experiment, but the EFFECT is large and correctly directed.)
+
+**Pipeline (verified, for the HPC package):** QE pw.x PBE-PAW SCF →
+pp.x plot_num=0 (valence ρ) + plot_num=8 (ELF) → critic2
+`crystal cube; load val zpsp <Zval…>; load elf; reference val;
+xdm grid rho val elf elf rhoae?(omit) xa1 a1 xa2 a2 hirshfeld_i
+alpharef gould|scale|stern wfcdir <ld1_pbe>`. No rhoae needed (core
+reconstructed from ZPSP; HI uses valence). Solids + molecules now both work.
+NEXT: package this for the submission agent → full alkali-halide/oxide set.
