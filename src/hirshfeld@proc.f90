@@ -396,14 +396,17 @@ contains
        do iat = 1, nca
           iz = s%c%spc(s%c%atcel(iat)%is)%z
           qraw = zval(iat) - nelec(iat)                ! bare HI update (Q = zval - N)
-          dQ = abs(qraw - qprev(iat))                  ! residual (convergence measure)
-          if (dQ > dQmax) dQmax = dQ
           ! damp, then clamp to [qflo, iz-1d-3]: the element-dependent anion
           ! floor stops Q escaping to the diffuse/best-effort references near
           ! the cache floor; the cation side is bounded by the bare nucleus.
           bas%hi_qfinal(iat) = qprev(iat) + hi_beta * (qraw - qprev(iat))
           if (bas%hi_qfinal(iat) < qflo(iat)) bas%hi_qfinal(iat) = qflo(iat)
           if (bas%hi_qfinal(iat) > dble(iz) - 1d-3) bas%hi_qfinal(iat) = dble(iz) - 1d-3
+          ! convergence is on the CHANGE OF STATE (so an atom pinned at a clamp,
+          ! which is stable but whose raw residual stays nonzero, counts as
+          ! converged rather than falsely flagging non-convergence).
+          dQ = abs(bas%hi_qfinal(iat) - qprev(iat))
+          if (dQ > dQmax) dQmax = dQ
           bas%hi_qlo(iat) = floor(bas%hi_qfinal(iat))
           bas%hi_qhi(iat) = bas%hi_qlo(iat) + 1
           bas%hi_frac(iat) = bas%hi_qfinal(iat) - dble(bas%hi_qlo(iat))
