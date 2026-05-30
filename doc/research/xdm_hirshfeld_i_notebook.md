@@ -353,3 +353,42 @@ input that is inadequate, not the partitioning. This belongs in the paper
 as a methods caveat: HI-XDM volumes require an integration grid that
 resolves the reference density used in the SCF.
 
+### 2026-05-30g — postg + xdm_wfn audit → choose M; the cap is grid-only
+Read **postg** (Erin/Alberto's reference molecular-XDM code,
+`~/projects/postg`) and critic2's own molecular path `xdm_wfn`:
+- **No cap anywhere in molecular XDM.** postg sets the atomic
+  polarizability as `mol%v(i)*frepol(z)/frevol(z)` and critic2's
+  `calc_coefs` as `atpol = v(i)*alpha_free(z)/frevol(z,chf)` — both
+  `V_AIM/V_free·α_free` with **no `min(ratio,1)`**. The cap exists *only*
+  in critic2's `xdm_grid`. → Stage-0's cap removal aligns the grid path
+  with postg *and* critic2's molecular path; it is not a new assumption.
+  (Notebook §3 said "no cap" is the TS+HI/FI field standard; postg shows
+  XDM itself already does this for molecules.)
+- Both integrate volumes/moments on an **atom-centred Becke/Franchini
+  mesh** (`m%gen(sy%c,mesh_type,mesh_level)` in `xdm_wfn`), which is
+  cusp-safe — exactly the fix for the §f uniform-grid failure.
+- `frevol(z,chf)` is functional-dependent (per-XC free-volume tables);
+  `alpha_free`/`frepol` are neutral free-atom polarizabilities. Both are
+  **neutral** references — the charge-matched versions are the open
+  Stage-1/2 problem Erin flagged.
+
+**Decision: implement M** (charge-aware HI in critic2's mesh `xdm_wfn`),
+keep P (grid) for periodic/planewave solids. postg is not needed as a
+separate engine but is the perfect external **cross-check** (and an
+option to port HI into later if the community wants it).
+
+**M design.** `xdm_wfn` currently: mesh → `m%f(:,1)=ρ`, `m%f(:,4)=b`;
+per-atom neutral ref `agrid(iz)%interp(r,…)` → promol `m%f(:,2)` →
+Hirshfeld weight `ρ_A/promol` → `v(i)`, `mm(l,i)`. To add HI:
+1. extract a reusable helper `hirsh_i_refrho(iz, Q, r) → ρ` (charge-aware
+   reference density at distance r, from the cached integer-(Z,q) `.rho`
+   grids + linear interpolation in Q) — refactor out of `hirsh_i_eval`;
+2. **mesh HI SCF** (cusp-safe): iterate Q_A using mesh integration of the
+   HI Hirshfeld populations until converged (reuses the mesh `m` and the
+   helper);
+3. swap the neutral `agrid` ref for `hirsh_i_refrho(iz,Q_A,r)` in the
+   promol and per-atom weight; HI weights drive **both** v and mm (per
+   Erin); neutral `frevol/α_free` anchor kept (Stage 0 semantics).
+Keyword: extend the molecular `XDM … chf` form (and/or the `xdm` driver)
+with `HIRSHFELD_I [WFCDIR …]`. Default unchanged.
+
