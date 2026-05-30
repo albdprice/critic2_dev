@@ -293,12 +293,15 @@ contains
           onlyc = .true.
        elseif (equal(word,"hirshfeld_i").or.equal(word,"hi")) then
           ! charge-aware (Hirshfeld-I) partitioning for the XDM volumes
-          ! and moments; drops the min(ratio,1) cap. Research option.
+          ! and exchange-hole moments; drops the min(ratio,1) cap.
+          ! Moments use HI weights by default (per E. Johnson); use
+          ! VOLONLY for the volume-only ablation. Research option.
           dohi = .true.
-       elseif (equal(word,"moments").and.dohi) then
-          ! also use Hirshfeld-I weights for the exchange-hole moments
-          ! (otherwise only the volume/polarizability is charge-aware)
           himoments = .true.
+       elseif (equal(word,"volonly").and.dohi) then
+          ! ablation: keep neutral weights for the exchange-hole moments
+          ! (charge-aware volume/polarizability only)
+          himoments = .false.
        elseif (equal(word,"wfcdir").and.dohi) then
           bashi%hi_wfcdir = getword(line,lp)
           if (len_trim(bashi%hi_wfcdir) == 0) then

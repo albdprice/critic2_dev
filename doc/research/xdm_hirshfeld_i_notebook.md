@@ -115,11 +115,13 @@ become **more** polarizable than the neutral atom (and than cations).
 - **RQ1 (cap):** how much is `min(ratio,1)` currently suppressing? Does
   dropping it (allowing anions > α_free) change ionic-system XDM
   coefficients materially? *(Stage 0)*
-- **RQ2 (α only vs also moments):** XDM-specific, no literature guidance
-  (TS/FI have no exchange-hole moments). Should HI weights partition only
-  the polarizability/volume, or **also** the exchange-hole moments M_l?
-  The moments already integrate the real density — quantify how much the
-  *weight* vs the *reference* matters. *(Stage 0, two sub-modes)*
+- **RQ2 (α only vs also moments): RESOLVED.** E. Johnson (lead PI on XDM,
+  2026-05-30, pers. comm.): *"yes, you would want to compute the moment
+  integrals using the HI weights as well … that should be
+  straightforward, it's the reference atom bit that is not obvious."* →
+  apply HI weights to **both** volumes and exchange-hole moments (default);
+  the hard/open problem is the **reference atom** (Stages 1–2). We keep
+  the volume-only mode as an *ablation* to quantify the moment effect.
 - **RQ3 (volume reference):** does swapping V_free,neutral → charge-matched
   V_ref(Q_A) (FI volume formula, using our ion densities) improve over
   neutral-volume + dropped cap? *(Stage 1)*
@@ -259,4 +261,53 @@ Default XDM path untouched.
   (how the shared hole is divided), not through the reference shape —
   so we expect (a) vs (b) to differ less than neutral-vs-HI does. To be
   measured.
+
+### 2026-05-30d — RQ2 resolved by XDM PI; code default flipped
+- E. Johnson (XDM lead) confirms HI weights should partition the
+  exchange-hole moments too (the "b" sub-mode), and flags the
+  **reference-atom** quantities as the genuinely hard part — consistent
+  with §3/§4 (charge-matched references are the crux; Stages 1–2).
+- Code: `HIRSHFELD_I` now applies HI to **both** volumes and moments by
+  default; new `VOLONLY` sub-keyword runs the volume-only ablation. (So
+  `MOMENTS` is no longer needed; default = recommended.)
+- Re-prioritization: Stage 0 stands (drop cap, HI weights incl. moments);
+  the scientific weight shifts to Stage 1/2 (the reference atom). Keep
+  the volume-only ablation only to *report* the moment contribution.
+
+### 2026-05-30e — Stage 0 first result: water (PBE/def2-TZVP)
+Pipeline (molecular wfx→grid; the wfx-as-structure reader has a latent
+bug — `</`-tag check in wfn_private — so use **fchk**; and inside a
+chemical function the field must be referenced by *name*, not `$1`):
+```
+molecule h2o.fchk ; load h2o.fchk id mol
+load as "$mol"        80 80 80 id rho1
+load as "gkin($mol)"  80 80 80 id tau1   ! orbital τ for the BR hole
+reference rho1
+xdm grid rho rho1 tau tau1 rhoae rho1 xa1 1 xa2 1 [hirshfeld_i wfcdir …/ld1_pbe [volonly]]
+```
+HI SCF converged in 13 iters. Atomic units:
+
+| atom | V (neut) | V (HI) | V/Vfree (neut→HI) | M1 (neut) | M1 (HI) |
+|---|---|---|---|---|---|
+| O | 21.38 | 27.33 | 0.90 → **1.15** | 4.710 | **5.649** |
+| H | 5.52 | 3.25 | 0.53 → **0.31** | 1.257 | **0.834** |
+
+C6 (a.u.): O–O 11.46 → **17.58** (+53%); O–H 3.95 → 3.13 (−21%);
+H–H 1.49 → **0.583** (−61%).
+
+Three findings:
+1. **The cap binds even for water.** HI gives O a volume ratio **1.15 > 1**;
+   the old `min(ratio,1)` would clip O's polarizability (~−15%). So
+   dropping the cap is not just an ionic-solid concern.
+2. **Moments matter (RQ2 / Erin).** HI-weighting the exchange-hole
+   moments shifts M1 by +20% (O) / −34% (H) vs the volonly ablation
+   (which holds moments at neutral). So the PI's "do the moments too" is
+   numerically significant, not cosmetic.
+3. **Charge-transfer-consistent redistribution:** dispersion piles onto
+   the electron-rich O (C6 O–O +53%) and comes off the electron-poor H
+   (C6 H–H −61%) — the qualitatively correct direction.
+Caveat: Stage 0 keeps the **neutral** Vfree/α_free anchor and no refit,
+so these are *raw partition* changes, not validated energies. Whether
+they improve accuracy needs reference C6 and the Stage-1/2 reference
+atom (the hard part). Ionic set (LiF, NaCl) + CH4 next.
 
