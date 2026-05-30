@@ -129,13 +129,38 @@ become **more** polarizable than the neutral atom (and than cations).
 - **RQ5 (refit):** do XDM's a1/a2 damping parameters need refitting after
   any of the above? (FI did not need a refit; XDM ≠ MBD — verify.)
 
-## 5. Open literature gap (being closed — Task #27)
+## 5. Free-ion reference densities for unbound anions — resolved (Task #27)
 
-The 2014 TS+HI paper's method for obtaining its **integer free-ion
-reference densities for unbound anions** was not pinned down by the
-automated review (only FI's 2017 power-law confinement is documented).
-This is the most load-bearing comparison for our box-confinement choice.
-→ reading Bučko 2013/2014 methods directly; result logged below.
+**Finding:** the field has no single canonical recipe; unbound-anion
+reference densities for Hirshfeld-I are regularized by one of four
+families, and **our box confinement is a legitimate member**:
+
+| Approach | Mechanism | Parameter | Notes |
+|---|---|---|---|
+| **Watson sphere / confining potential** | external (charged shell or wall) potential binds the extra electron | sphere radius & charge | *most common in HI literature*; smooth; mimics a Madelung field |
+| **Power-law confinement** `(r/r_a)^σ` | smooth external potential | r_a, σ | used by the rigorous **FI** dispersion work (Gould 2016/17) |
+| **Box / hard wall (ours)** | reduce the radial box `rmax` | `rmax` (we tie it to `3.6·R99`) | simplest; crudest (sharp cutoff at wall); we showed the HI charge is flat to ~0.01 e across the gentle-confinement window, which mitigates the parameter dependence |
+| **Fractional nuclear charge** (Heidar-Zadeh/Ayers, *J. Mol. Model.* 2017) | raise Z to the smallest *effective* nuclear charge that binds all electrons, then scale | effective Z* | no external cavity; arguably best-behaved density shape for deeply-reduced atoms |
+
+Two corroborating points from the primary literature:
+- The 2013/2014 TS+HI papers and the VASP docs are **silent** on the
+  confinement recipe (abstracts only; the reference data is a precomputed
+  database "for the first six rows except lanthanides"). So there is *no
+  published canonical choice to match*; confinement is implementation-
+  specific. This vindicates treating it as a free methodological knob.
+- The unbound-anion problem has two distinct sub-cases worth stating in
+  the paper: monoanions "physically bound but computationally unbound"
+  (O⁻ at HF) vs "physically unbound but computationally bound" (N⁻ with
+  diffuse DFT). Polyanions are always unbound. All confinement schemes
+  exist precisely to regularize these.
+
+**Implication for us:** our box-confinement databases are defensible and
+in-family. The **fractional-nuclear-charge** scheme is the most notable
+*alternative* generation route (no cavity, better density tails for
+highly-reduced atoms) and is logged as a possible Stage-2+ refinement to
+compare against our `rmax`-confined `.rho` set. (Sources: search-verified
+abstracts of *J. Mol. Model.* 23:341 (2017), 10.1007/s00894-017-3514-6;
+FI arXiv:1703.08786; VASP TS+HI wiki.)
 
 ## 6. Staged execution plan
 
