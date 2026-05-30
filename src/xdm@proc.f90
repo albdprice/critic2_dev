@@ -182,10 +182,10 @@ contains
     use crystalmod, only: search_lattice
     use grid1mod, only: grid1, agrid
     use global, only: eval_next, cutrad
-    use hirshfeld, only: hirsh_i_driver, hirsh_i_eval, hirsh_i_cleanup
+    use hirshfeld, only: hirsh_i_driver, hirsh_i_eval, hirsh_i_cleanup, hirsh_i_prepare, hirsh_i_cache_clean
     use types, only: basindat
     use tools_io, only: uout, lgetword, equal, getword, ferror, faterr, string,&
-       warning, ioj_right
+       warning, ioj_right, nameguess
     use param, only: bohrtoa, pi, maxzat0, alpha_free, fact, autogpa, icrd_crys,&
        ifformat_as_ft_grad, ifformat_as_ft_lap
     character*(*), intent(inout) :: line
@@ -195,6 +195,8 @@ contains
     ! Hirshfeld weights are replaced by converged Hirshfeld-I weights and
     ! the min(ratio,1) polarizability cap is dropped.
     logical :: dohi, himoments
+    integer :: ialpharef    ! Stage 2 charge-aware alpha: 0=none, 1=Gould, 2=scale, 3=Kirkwood
+    real*8 :: qhi, atpx
     type(basindat) :: bashi
     integer, allocatable :: icel_nneq(:)
     real*8, allocatable :: phi_hi(:,:,:)
@@ -238,6 +240,7 @@ contains
     onlyc = .false.
     dohi = .false.
     himoments = .false.
+    ialpharef = 0
     bashi%hi_wfcdir = ""
     bashi%hi_tol = 1d-4
     bashi%hi_maxit = 60
@@ -335,6 +338,19 @@ contains
           ! ablation: keep neutral weights for the exchange-hole moments
           ! (charge-aware volume/polarizability only)
           himoments = .false.
+       elseif (equal(word,"alpharef").and.dohi) then
+          ! Stage 2 charge-aware polarizability reference (periodic path)
+          word = lgetword(line,lp)
+          if (equal(word,"gould").or.equal(word,"fi")) then
+             ialpharef = 1
+          elseif (equal(word,"scale")) then
+             ialpharef = 2
+          elseif (equal(word,"compute").or.equal(word,"moment")) then
+             ialpharef = 3
+          else
+             call ferror("xdm_driver","unknown ALPHAREF mode: "//word,faterr,line,syntax=.true.)
+             return
+          end if
        elseif (equal(word,"wfcdir").and.dohi) then
           bashi%hi_wfcdir = getword(line,lp)
           if (len_trim(bashi%hi_wfcdir) == 0) then
@@ -620,6 +636,11 @@ contains
        else
           write (uout,'("+ Hirshfeld-I weights applied to volumes/polarizability only (neutral moments)")')
        end if
+       ! Stage 2 (periodic): load the charge-matched reference cache so
+       ! chargeaware_atpol can integrate hirsh_i_refrho for the converged HI
+       ! charges (routes 1/3; route 2 needs no cache).
+       if (ialpharef == 1 .or. ialpharef == 3) &
+          call hirsh_i_prepare(sy,bashi%hi_qfinal,bashi%hi_wfcdir)
     end if
 
     ! integrate atomic volumes and moments
@@ -710,14 +731,42 @@ contains
        ! Charge-aware (Hirshfeld-I) partitioning drops the min(ratio,1)
        ! cap so anions can be more polarizable than the neutral free atom
        ! (the established TS+HI/FI behaviour). Neutral free-atom volume and
-       ! polarizability are still used as the reference anchor in Stage 0.
+       ! polarizability are the reference anchor in Stage 0; Stage 2
+       ! (ALPHAREF) replaces alpha_free with a charge-aware reference.
        if (dohi) then
-          alpha(i) = (avol(i) / afree(i)) * alpha_free(sy%c%spc(sy%c%at(i)%is)%z)
+          atpx = -1d0
+          if (ialpharef > 0) then
+             qhi = bashi%hi_qfinal(icel_nneq(i))
+             atpx = chargeaware_atpol(sy%c%spc(sy%c%at(i)%is)%z, qhi, avol(i), afree(i), ialpharef)
+          end if
+          if (atpx > 0d0) then
+             alpha(i) = atpx                                  ! Stage 2 charge-aware reference
+          else
+             alpha(i) = (avol(i) / afree(i)) * alpha_free(sy%c%spc(sy%c%at(i)%is)%z)  ! Stage 0
+          end if
        else
           alpha(i) = min(avol(i) / afree(i),1d0) * alpha_free(sy%c%spc(sy%c%at(i)%is)%z)
        end if
     end do
     deallocate(ityp)
+    if (ialpharef == 1 .or. ialpharef == 3) call hirsh_i_cache_clean()
+
+    ! report charge-aware polarizabilities (periodic Stage 2)
+    if (dohi .and. ialpharef > 0) then
+       select case (ialpharef)
+       case (1); write (uout,'("+ Stage 2A (ALPHAREF GOULD): charge-aware polarizabilities (a0^3)")')
+       case (2); write (uout,'("+ Stage 2B (ALPHAREF SCALE): charge-aware polarizabilities (a0^3)")')
+       case (3); write (uout,'("+ Stage 2C (ALPHAREF COMPUTE): charge-aware polarizabilities (a0^3)")')
+       end select
+       write (uout,'("# i At      Q             V_AIM         a_neutscal    alpha_AIM")')
+       do i = 1, sy%c%nneq
+          ii = sy%c%spc(sy%c%at(i)%is)%z
+          if (ii < 1) cycle
+          qhi = bashi%hi_qfinal(icel_nneq(i))
+          write (uout,'(I3,X,A,X,1p,4(E13.6,X))') i, string(nameguess(ii,.true.)), &
+             qhi, avol(i), (avol(i)/afree(i))*alpha_free(ii), alpha(i)
+       end do
+    end if
 
     ! Write out some information
     write (uout,*)
@@ -2184,6 +2233,65 @@ contains
     end if
     a = (1d0-f)*a0 + f*aend
   end function ion_alpha0
+
+  !> Charge-aware atomic polarizability (a0^3) for the Stage-2 routes, shared
+  !> by the molecular (xdm_wfn) and periodic (xdm_grid) paths so both use
+  !> identical formulas. iz = atomic number, qreal = HI charge, vaim = HI
+  !> atom-in-molecule volume, vfree0 = neutral free-atom volume anchor of the
+  !> calling path. ialpha: 1=Gould table FI (2A), 2=volume-scaling exponent
+  !> (2B), 3=Kirkwood moment estimator (2C). Returns -1 if the route is
+  !> unavailable for this atom (caller falls back to neutral scaling). Routes
+  !> 1 and 3 integrate the charge-matched reference density via hirsh_i_refrho
+  !> and REQUIRE the (iz,q) reference cache to be loaded (hirsh_i_prepare).
+  function chargeaware_atpol(iz,qreal,vaim,vfree0,ialpha) result(atpol)
+    use hirshfeld, only: hirsh_i_refrho
+    use param, only: pi, alpha_free, pprime_gb
+    integer, intent(in) :: iz, ialpha
+    real*8, intent(in) :: qreal, vaim, vfree0
+    real*8 :: atpol
+
+    integer :: k
+    real*8 :: vfq, r2q, r20, nq, n0, rmidv, hv, qv, rr, rwv, afi, a2c, rh0, rhq
+
+    atpol = -1d0
+    if (iz < 1) return
+
+    ! Stage 2B: volume-scaling exponent, no reference densities needed.
+    if (ialpha == 2) then
+       if (vfree0 > 1d-30) atpol = alpha_free(iz) * (vaim/vfree0)**pprime_gb(iz)
+       return
+    end if
+
+    ! Stages 2A/2C: radial moments of the charge-matched reference density.
+    vfq = 0d0; r2q = 0d0; r20 = 0d0; nq = 0d0; n0 = 0d0
+    rmidv = 1d0 / real(iz,8)**(1d0/3d0)
+    hv = 1d0 / real(252,8)
+    do k = 1, 251
+       qv = hv * k
+       rr = rmidv * qv / (1d0-qv)
+       rwv = 4d0*pi*hv * rr**2 * rmidv/(1d0-qv)**2
+       rhq = hirsh_i_refrho(iz,qreal,rr)
+       vfq = vfq + rhq * rwv * rr**3
+       if (ialpha == 3) then
+          rh0 = hirsh_i_refrho(iz,0d0,rr)
+          n0  = n0  + rh0 * rwv
+          nq  = nq  + rhq * rwv
+          r20 = r20 + rh0 * rwv * rr**2
+          r2q = r2q + rhq * rwv * rr**2
+       end if
+    end do
+    if (vfq <= 1d-30) return
+
+    if (ialpha == 1) then
+       afi = ion_alpha0(iz,qreal)                 ! Gould-Bucko FI table
+       if (afi > 0d0) atpol = afi * vaim / vfq
+    elseif (ialpha == 3) then
+       if (r20 > 1d-30 .and. n0 > 1d-30 .and. nq > 1d-30) then
+          a2c = alpha_free(iz) * (r2q*r2q/nq) / (r20*r20/n0)   ! Kirkwood, calibrated to neutral
+          atpol = a2c * vaim / vfq
+       end if
+    end if
+  end function chargeaware_atpol
 
   subroutine calc_coefs(a1,a2,chf,v,mm,c6,c8,c10,rvdw,volscal,atpolov)
     use systemmod, only: sy
