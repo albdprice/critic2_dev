@@ -149,11 +149,23 @@ contains
     use crystalmod, only: search_lattice
     use grid1mod, only: grid1, agrid
     use global, only: eval_next, cutrad
+    use hirshfeld, only: hirsh_i_driver, hirsh_i_eval, hirsh_i_cleanup
+    use types, only: basindat
     use tools_io, only: uout, lgetword, equal, getword, ferror, faterr, string,&
        warning, ioj_right
     use param, only: bohrtoa, pi, maxzat0, alpha_free, fact, autogpa, icrd_crys,&
        ifformat_as_ft_grad, ifformat_as_ft_lap
     character*(*), intent(inout) :: line
+
+    ! Hirshfeld-I (charge-aware) XDM partitioning -- research option, see
+    ! doc/research/xdm_hirshfeld_i_notebook.md. When dohi, the neutral
+    ! Hirshfeld weights are replaced by converged Hirshfeld-I weights and
+    ! the min(ratio,1) polarizability cap is dropped.
+    logical :: dohi, himoments
+    type(basindat) :: bashi
+    integer, allocatable :: icel_nneq(:)
+    real*8, allocatable :: phi_hi(:,:,:)
+    real*8 :: rhofree_h, pdn, pdh
 
     logical :: ok, dopro, docor
     character(len=:), allocatable :: word
@@ -191,6 +203,11 @@ contains
     nclean = 0
     upto = 10
     onlyc = .false.
+    dohi = .false.
+    himoments = .false.
+    bashi%hi_wfcdir = ""
+    bashi%hi_tol = 1d-4
+    bashi%hi_maxit = 60
 
     ! parse the input and check sanity
     do while(.true.)
@@ -274,6 +291,26 @@ contains
           isdefa = .false.
        elseif (equal(word,"onlyc")) then
           onlyc = .true.
+       elseif (equal(word,"hirshfeld_i").or.equal(word,"hi")) then
+          ! charge-aware (Hirshfeld-I) partitioning for the XDM volumes
+          ! and moments; drops the min(ratio,1) cap. Research option.
+          dohi = .true.
+       elseif (equal(word,"moments").and.dohi) then
+          ! also use Hirshfeld-I weights for the exchange-hole moments
+          ! (otherwise only the volume/polarizability is charge-aware)
+          himoments = .true.
+       elseif (equal(word,"wfcdir").and.dohi) then
+          bashi%hi_wfcdir = getword(line,lp)
+          if (len_trim(bashi%hi_wfcdir) == 0) then
+             call ferror("xdm_driver","WFCDIR needs a directory",faterr,line,syntax=.true.)
+             return
+          end if
+       elseif (equal(word,"hitol").and.dohi) then
+          ok = eval_next(bashi%hi_tol,line,lp)
+          if (.not.ok) then
+             call ferror("xdm_driver","wrong HITOL",faterr,line,syntax=.true.)
+             return
+          end if
        elseif (equal(word,"upto")) then
           ok = eval_next(upto,line,lp)
           if (.not.ok) then
@@ -522,11 +559,38 @@ contains
           call ferror("xdm_driver","incongruent sizes of rho and rhoae",faterr)
     endif
 
+    ! Hirshfeld-I (charge-aware) partitioning: run the SCF on the XDM
+    ! grid to converge per-atom charge states, keep the converged
+    ! Hirshfeld-I promolecular density as the (separate) HI denominator,
+    ! and map each non-equivalent atom to a representative cell atom.
+    if (dohi) then
+       if (irho /= sy%iref) &
+          call ferror("xdm_driver","HIRSHFELD_I requires rho to be the reference field",faterr)
+       write (uout,'("+ Charge-aware XDM: running Hirshfeld-I SCF on the grid")')
+       bashi%n = n
+       if (allocated(bashi%f)) deallocate(bashi%f)
+       allocate(bashi%f(n(1),n(2),n(3)))
+       bashi%f = sy%f(ipdens)%grid%f   ! seed with the neutral promolecular density
+       call hirsh_i_driver(sy,bashi)   ! SCF; fills bashi%f with the HI promolecular density
+       allocate(phi_hi(n(1),n(2),n(3)))
+       phi_hi = bashi%f
+       allocate(icel_nneq(sy%c%nneq))
+       icel_nneq = 0
+       do i = 1, sy%c%ncel
+          if (icel_nneq(sy%c%atcel(i)%idx) == 0) icel_nneq(sy%c%atcel(i)%idx) = i
+       end do
+       if (himoments) then
+          write (uout,'("+ Hirshfeld-I weights applied to BOTH volumes and exchange-hole moments")')
+       else
+          write (uout,'("+ Hirshfeld-I weights applied to volumes/polarizability only (neutral moments)")')
+       end if
+    end if
+
     ! integrate atomic volumes and moments
     avol = 0d0
     ml = 0d0
     write (uout,'("+ Calculating volumes and moments")')
-    !$omp parallel do private(x,ri,rhofree,raux1,raux2,rhot,wei,db,ri2,db2,i,j,k,l,ll,mll,avoll)
+    !$omp parallel do private(x,ri,rhofree,rhofree_h,pdn,pdh,raux1,raux2,rhot,wei,db,ri2,db2,i,j,k,l,ll,mll,avoll)
     do iat = 1, sy%c%nneq
        mll = 0d0
        avoll = 0d0
@@ -541,9 +605,22 @@ contains
                    ri = sqrt(x(1)*x(1) + x(2)*x(2) + x(3)*x(3))
                    if (ri > cutrad(sy%c%spc(sy%c%at(iat)%is)%z)) cycle
 
+                   ! neutral free-atom reference (always) and neutral promol denominator
                    call agrid(sy%c%spc(sy%c%at(iat)%is)%z)%interp(ri,rhofree,raux1,raux2)
                    rhot = sy%f(irho)%grid%f(i,j,k)
-                   wei = rhofree * rhot / max(sy%f(ipdens)%grid%f(i,j,k),1d-14)
+                   pdn = max(sy%f(ipdens)%grid%f(i,j,k),1d-14)
+                   ! charge-aware (Hirshfeld-I) reference and HI promol denominator
+                   if (dohi) then
+                      call hirsh_i_eval(bashi,icel_nneq(iat),ri,rhofree_h)
+                      pdh = max(phi_hi(i,j,k),1d-14)
+                   end if
+
+                   ! exchange-hole moments: HI weights only if requested (MOMENTS)
+                   if (himoments) then
+                      wei = rhofree_h * rhot / pdh
+                   else
+                      wei = rhofree * rhot / pdn
+                   end if
                    db = max(ri-sy%f(ib)%grid%f(i,j,k),0d0)
 
                    ri2 = 1d0
@@ -554,11 +631,20 @@ contains
                       mll(l) = mll(l) + wei * (ri2 - db2)**2
                    end do
 
-                   if (irhoae > 0) then
-                      wei = rhofree * sy%f(irhoae)%grid%f(i,j,k) / max(sy%f(ipdens)%grid%f(i,j,k),1d-14)
+                   ! atomic volume (feeds the polarizability): HI weights when dohi
+                   if (dohi) then
+                      if (irhoae > 0) then
+                         wei = rhofree_h * sy%f(irhoae)%grid%f(i,j,k) / pdh
+                      else
+                         wei = rhofree_h * (rhot+sy%f(icor)%grid%f(i,j,k)) / pdh
+                      end if
                    else
-                      wei = rhofree * (rhot+sy%f(icor)%grid%f(i,j,k)) / max(sy%f(ipdens)%grid%f(i,j,k),1d-14)
-                   endif
+                      if (irhoae > 0) then
+                         wei = rhofree * sy%f(irhoae)%grid%f(i,j,k) / pdn
+                      else
+                         wei = rhofree * (rhot+sy%f(icor)%grid%f(i,j,k)) / pdn
+                      end if
+                   end if
                    avoll = avoll + wei * ri**3
                 end do ! i
              end do ! j
@@ -585,7 +671,15 @@ contains
        else
           afree(i) = afree(ityp(sy%c%spc(sy%c%at(i)%is)%z))
        endif
-       alpha(i) = min(avol(i) / afree(i),1d0) * alpha_free(sy%c%spc(sy%c%at(i)%is)%z)
+       ! Charge-aware (Hirshfeld-I) partitioning drops the min(ratio,1)
+       ! cap so anions can be more polarizable than the neutral free atom
+       ! (the established TS+HI/FI behaviour). Neutral free-atom volume and
+       ! polarizability are still used as the reference anchor in Stage 0.
+       if (dohi) then
+          alpha(i) = (avol(i) / afree(i)) * alpha_free(sy%c%spc(sy%c%at(i)%is)%z)
+       else
+          alpha(i) = min(avol(i) / afree(i),1d0) * alpha_free(sy%c%spc(sy%c%at(i)%is)%z)
+       end if
     end do
     deallocate(ityp)
 
@@ -765,6 +859,11 @@ contains
     do i = 1, nclean
        call sy%unload_field(iclean(i))
     end do
+    if (dohi) then
+       call hirsh_i_cleanup(bashi)
+       if (allocated(phi_hi)) deallocate(phi_hi)
+       if (allocated(icel_nneq)) deallocate(icel_nneq)
+    end if
 
   end subroutine xdm_grid
 

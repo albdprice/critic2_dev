@@ -208,3 +208,55 @@ keyword.
   field standard; the minimal first experiment is to drop our cap and
   feed HI weights in (Stage 0).
 
+### 2026-05-30b — Stage 0 implementation plan (xdm@proc.f90, grid driver)
+Code map of the XDM grid driver:
+- Parser loop (ll. ~190–290): field selectors + a1/a2/upto/onlyc.
+- Promolecular `ipdens` (neutral Σρ_B) and core densities built on the
+  grid (ll. ~324–390).
+- Volume/moment loop (ll. ~525–575): per nneq atom, sum
+  `wei = ρ_A^free · ρ / ρ_promol`; `M_l` from the valence ρ, `V_A` from
+  the all-electron ρ (irhoae) or ρ+core. `ρ_A^free` from `agrid` (neutral).
+- α (l. ~588): `min(avol/afree,1)·alpha_free` (cap + neutral ref).
+
+Stage-0 change (keyword-gated `XDM … HIRSHFELD_I [WFCDIR dir]`), done in
+two sub-steps:
+- **0.1 (full HI, this entry):** run the HI SCF (`hirsh_i_driver`) on the
+  XDM grid; overwrite `ipdens` with the HI promolecular Σρ_B^{Q_B};
+  replace the neutral `agrid` numerator with `hirsh_i_eval` (charged
+  ref); **drop the cap** → `alpha = avol/afree·alpha_free`. This makes
+  BOTH `V_A` and `M_l` HI-weighted (sub-mode b). Neutral `afree`,
+  `alpha_free` kept (Stage 0).
+  Requires `irho == sy%iref` (HI SCF integrates `s%f(s%iref)`); warn
+  otherwise. Map each nneq atom → a representative cell atom for the HI
+  charge state.
+- **0.2 (RQ2 toggle):** add `MOMENTS` sub-option to choose whether the
+  exchange-hole moments use HI (sub-mode b) or stay neutral (sub-mode a),
+  to isolate the moment effect. Implemented after 0.1 builds/runs.
+Default XDM path untouched.
+
+### 2026-05-30c — Stage 0 implemented (both sub-modes), builds clean
+`src/xdm@proc.f90` (`xdm_grid`):
+- New keywords: `XDM … HIRSHFELD_I [MOMENTS] [WFCDIR dir] [HITOL t]`
+  (alias `HI`). `dohi` gates everything; default path byte-for-byte
+  unchanged.
+- Runs `hirsh_i_driver` on the XDM grid (requires `rho == reference
+  field`; errors otherwise). Keeps the **neutral** promolecular in
+  `ipdens` and stores the **HI** promolecular Σρ_B^{Q_B} in a separate
+  `phi_hi` array, so the two sub-modes are selectable per-use:
+  - volume/α weight: HI when `dohi` (always, for the polarizability);
+  - exchange-hole moment weight: HI only when `MOMENTS` (sub-mode b),
+    else neutral (sub-mode a). → directly answers RQ2 by toggling.
+- Numerator ρ_A from `hirsh_i_eval` (charged ref) vs `agrid` (neutral);
+  nneq→cell-atom map for the per-atom charge state. Thread-safe (HI
+  cache preloaded in the driver; eval is read-only in the OMP loop).
+- α: cap dropped when `dohi` → `alpha = (avol/afree)·alpha_free`
+  (neutral afree/alpha_free anchor kept; that's Stage 1/2's job).
+- Cleanup via `hirsh_i_cleanup(bashi)`.
+- Builds clean (gfortran 13.3.0). **Not yet run** — needs XDM-ready
+  inputs (ρ + τ/ELF + BR-hole b); that's the next entry (benchmark).
+- Design note for RQ2: because XDM's M_l already integrate the *real*
+  density, sub-mode (a) changes M_l only through the *partition weight*
+  (how the shared hole is divided), not through the reference shape —
+  so we expect (a) vs (b) to differ less than neutral-vs-HI does. To be
+  measured.
+
