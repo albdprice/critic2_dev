@@ -153,6 +153,8 @@ contains
                 ialpharef = 1   ! Stage 2A: Gould-Bucko tabulated ion alpha, FI-faithful
              elseif (equal(word,"scale")) then
                 ialpharef = 2   ! Stage 2B: element-specific volume-scaling exponent p'_Z
+             elseif (equal(word,"compute").or.equal(word,"moment")) then
+                ialpharef = 3   ! Stage 2C: Kirkwood-type moment estimator from confined ld1.x ions
              else
                 call ferror("xdm_driver","unknown ALPHAREF mode: "//word,faterr,line,syntax=.true.)
              end if
@@ -1301,6 +1303,7 @@ contains
     real*8 :: rho, rhop, rhopp, x(3), r, a1, a2, nn, rb
     real*8 :: dum1(3), dum2(3,3), dqmax, ni, wmom, wvol, refh
     real*8 :: vf0, vfq, rmidv, hv, qv, rr, rwv, apol0, apolq, afi
+    real*8 :: r2q, r20, nq, n0, a2c
     real*8, allocatable :: mm(:,:), v(:), qcel(:), qnew(:), phihi(:), prneu(:), qflo(:)
     real*8, allocatable :: volscal(:), atpolov(:)
     logical :: lhi, lhimom, lvolref
@@ -1582,7 +1585,7 @@ contains
        ! Gould-Bucko ion polarizability (ion_alpha0, linear-in-N interp) and
        ! V_free(Q) the charge-matched reference volume. This is the physical
        ! pairing the volume-only VOLREF lacks.
-       if (lvolref .or. lalpharef == 1) then
+       if (lvolref .or. lalpharef == 1 .or. lalpharef == 3) then
           call hirsh_i_prepare(sy,qcel,wfcdir)
           if (lvolref) then
              write (uout,'("+ Stage 1 (VOLREF): charge-matched reference volumes")')
@@ -1592,10 +1595,14 @@ contains
              write (uout,'("+ Stage 2A (ALPHAREF GOULD): FI-faithful polarizabilities (a0^3)")')
              write (uout,'("# i At      Q             a_neutscal    a_FI(Q)       alpha_AIM")')
           end if
+          if (lalpharef == 3) then
+             write (uout,'("+ Stage 2C (ALPHAREF COMPUTE): Kirkwood moment estimator from confined ions (a0^3)")')
+             write (uout,'("# i At      Q             a_neutscal    a_2C(Q)       alpha_AIM")')
+          end if
           do i = 1, sy%c%ncel
              iz = sy%c%spc(sy%c%atcel(i)%is)%z
              if (iz < 1) cycle
-             vf0 = 0d0; vfq = 0d0
+             vf0 = 0d0; vfq = 0d0; r2q = 0d0; r20 = 0d0; nq = 0d0; n0 = 0d0
              rmidv = 1d0 / real(iz,8)**(1d0/3d0)
              hv = 1d0 / real(252,8)
              do k = 1, 251
@@ -1604,6 +1611,11 @@ contains
                 rwv = 4d0*pi*hv * rr**2 * rmidv/(1d0-qv)**2
                 vf0 = vf0 + hirsh_i_refrho(iz,0d0,rr)     * rwv * rr**3
                 vfq = vfq + hirsh_i_refrho(iz,qcel(i),rr) * rwv * rr**3
+                ! second moment <r^2> and electron count N for the Kirkwood estimator
+                n0  = n0  + hirsh_i_refrho(iz,0d0,rr)     * rwv
+                nq  = nq  + hirsh_i_refrho(iz,qcel(i),rr) * rwv
+                r20 = r20 + hirsh_i_refrho(iz,0d0,rr)     * rwv * rr**2
+                r2q = r2q + hirsh_i_refrho(iz,qcel(i),rr) * rwv * rr**2
              enddo
              if (vf0 > 1d-30) volscal(i) = vfq/vf0
              apol0 = v(i) * alpha_free(iz) / frevol(iz,chf)  ! neutral-scaling (au)
@@ -1621,6 +1633,23 @@ contains
                 else
                    write (uout,'(I3,X,A,X,1p,2(E13.6,X),A)') i, string(nameguess(iz,.true.)), &
                       qcel(i), apol0, "  (no GB datum; neutral-scaling used)"
+                end if
+             end if
+             if (lalpharef == 3) then
+                ! Kirkwood-type: alpha ~ <r^2>^2 / N, calibrated to the known
+                ! neutral free-atom alpha so the prefactor cancels:
+                !   alpha_free(Q) = alpha_free^0 * (<r2>(Q)^2/N(Q)) / (<r2>(0)^2/N(0))
+                ! then FI-faithful: alpha_AIM = alpha_free(Q) * V_AIM / V_free(Q).
+                a2c = 0d0
+                if (r20 > 1d-30 .and. n0 > 1d-30 .and. nq > 1d-30) &
+                   a2c = alpha_free(iz) * (r2q*r2q/nq) / (r20*r20/n0)
+                if (a2c > 0d0 .and. vfq > 1d-30) then
+                   atpolov(i) = a2c * v(i) / vfq
+                   write (uout,'(I3,X,A,X,1p,4(E13.6,X))') i, string(nameguess(iz,.true.)), &
+                      qcel(i), apol0, a2c, atpolov(i)
+                else
+                   write (uout,'(I3,X,A,X,1p,2(E13.6,X),A)') i, string(nameguess(iz,.true.)), &
+                      qcel(i), apol0, "  (degenerate; neutral-scaling used)"
                 end if
              end if
           enddo
