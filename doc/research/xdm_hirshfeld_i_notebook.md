@@ -63,16 +63,23 @@ LiH regression test `tests/009_intgrid/022_hirshfeld_i`. Generators in
   Produced the from-code reference-treatment table (neutral scaling
   overestimates cation α 20–35×).
 
-**IMMEDIATE NEXT ACTIONS (in order)**
-1. **Stage 2** (task #32, the real deliverable): compute confined-ion
-   polarizabilities `α_free(Q)` in the **same ld1.x family** as the densities
-   (no experimental data exists — must compute; sum-rule/TDDFT on the confined
-   ion), tabulate + interpolate, and use them *together* with Stage-1
-   `V_free(Q)` (FI formula `α=(V_AIM/V_free(Q))·α_free(Q)`). This makes VOLREF
-   physical and completes the FI-faithful model. Then re-benchmark and check
-   a1/a2 refit need (RQ5; FI needed none).
-2. Add a molecular HI-XDM regression test (task #36; needs shipped wfx/fchk —
-   `tests/zz_source` is download-gated/absent on the dev clone).
+- **Stage 2A (ALPHAREF GOULD) DONE (§m, commit c483a6f5):** FI-faithful
+  `α_AIM=α_FI(Q)·V_AIM/V_free(Q)`; Gould–Bučko ion-α embedded (`alpha_gb_*` in
+  param.F90; provenance `dat/xdm_ion_alpha_gould_bucko_2016.dat`); `ion_alpha0`
+  linear-in-N interp. From-code: Na 22.7→14.4, Cl 21.3→23.3, Li 6.8→5.5,
+  F 6.5→9.0 (cations↓, anions↑). Covers |Q|<1 (charges −1/0/+1).
+
+**IMMEDIATE NEXT ACTIONS — AP wants all of A/B/C; A done, B & C next**
+1. **Stage 2B** (task #38): per-element volume-scaling exponents `p'_Z` from
+   Gould JCP 2016 (arXiv:1608.04161; source already on dev-srv
+   `/tmp/gould/ex_1608.04161/paper.tex`) → `α(Q)=α⁰·(V_free(Q)/V_free⁰)^{p'_Z}`,
+   reusing our `V_free(Q)`. Keyword `alpharef scale`.
+2. **Stage 2C** (task #39): compute α from our confined ld1.x ions
+   (Sternheimer/coupled-KS, or finite-field 3D confined-atom DFT). `alpharef compute`.
+3. **Validate A/B/C** vs reference C₆/binding; check a1/a2 refit (RQ5). Add
+   multiply-charged ions + dynamic α(iω)/V_FI (ACS SI / Gould JCP DB) for full
+   periodic-table deployment.
+4. Molecular HI-XDM regression test (task #36; `tests/zz_source` download-gated).
 
 **Molecular HI-XDM run recipe (the working pipeline, via fchk — NOT wfx):**
 ```
@@ -718,4 +725,53 @@ element+charge), add a charge-state interpolator mirroring `hirsh_i_refrho`,
 wire `α_free(Q)` into `calc_coefs`, re-benchmark NaCl/LiF/H₂O/CH₄, check the
 a1/a2 refit need (RQ5; FI needed none). Decision needed from AP: pursue (A)
 [tabulate], (B) [scaling-law], or (C) [compute] first.
+→ **AP: do all three (A, B, C).**
+
+### 2026-05-30m — Stage 2A DONE: FI-faithful polarizabilities from the Gould–Bučko table (commit c483a6f5)
+Got the data **without the paywall** — pulled the arXiv e-print LaTeX source
+(`Bench.tex`) for 1604.02751 and parsed its three benchmark tables
+(neutrals / +1 cations / −1 anions; static α(0) in a₀³; ~244 species rows
+1–6). Validated against my Erin-table stand-ins (Li⁺ 0.193, H⁻ 216,
+Na⁰ 163, Cl⁰ 14.7 — exact). Provenance file
+`dat/xdm_ion_alpha_gould_bucko_2016.dat`; embedded as compile-time arrays
+`alpha_gb_{m1,0,p1}` in `param.F90` (a₀³; same convention as `alpha_free`
+but NOT ÷Å³ since already atomic units).
+- `ion_alpha0(iz,q)`: linear-in-N interpolation between bracketing integer
+  ions (the FI recipe `α_{Z,N}=f·α_{Z,⌈N⌉}+(1−f)·α_{Z,⌊N⌋}`); neutral
+  fallback if an ion datum is missing.
+- Keyword `xdm a1 a2 chf hirshfeld_i alpharef gould [wfcdir]` ⇒ FI-faithful
+  `α_AIM = α_FI(Q)·V_AIM/V_free(Q)` (uses Stage-1 `V_free(Q)`), plumbed via
+  `calc_coefs` optional `atpolov`.
+
+**From-code result — neutral-scaling α vs FI-faithful α (a₀³), the table
+fully from critic2:**
+
+| atom (Q) | α_neutscal | α_FI(Q) | **α_AIM (FI-faithful)** | full-ion ref |
+|---|---|---|---|---|
+| Na (+0.89) | 22.7 | 19.1 | **14.4** | 0.93 (Na⁺) |
+| Li (+0.93) | 6.80 | 11.4 | **5.5** | 0.19 (Li⁺) |
+| Cl (−0.89) | 21.3 | 28.6 | **23.3** | 30.3 (Cl⁻) |
+| F (−0.93) | 6.52 | 14.2 | **9.0** | 15.0 (F⁻) |
+
+FI-faithful moves **cations down, anions up** — both physically correct.
+(The atoms are fractional ions ±0.9, so linear-α interp retains some neutral
+character; full-ion refs shown for orientation.) Total E_disp (Ha),
+neutral / HI(Stage-0/M) / **FI(2A)**:
+NaCl −1.151e-3 / −9.520e-4 / **−8.99e-4**;
+LiF −1.955e-4 / −1.183e-4 / **−1.49e-4**;
+H₂O −2.255e-4 / −1.535e-4 / **−7.72e-5**;
+CH₄ −8.252e-4 / −7.718e-4 / **−4.03e-4**.
+Whether FI *improves* XDM needs reference binding/C₆ data (separate
+validation task). Known small issue: H⁺ has no GB entry (genuinely α=0 bare
+proton), so our "0 ⇒ unavailable" convention falls H back to neutral α
+(minor; H still gets the V_AIM/V_free(Q) factor). Inputs:
+`/tmp/xdmtest/{NaCl,LiF,h2o,CH4}_fi.cri`.
+- **Coverage:** GB benchmark has integer charges −1/0/+1 only → covers all our
+  HI charges (|Q|<1). Multiply-charged ions (O²⁻ etc.) and the *dynamic*
+  α(iω) + V_FI volumes are in the ACS SI / Gould 2016 JCP "minimal chemistry"
+  DB — to add for full periodic-table deployment.
+- **Next: Stage 2B** (volume-scaling exponents p'_Z, Gould JCP 2016 /
+  arXiv:1608.04161 — needs the per-element exponent table) and **2C** (compute
+  α from our confined ld1.x ions). Then validate (A/B/C) against reference
+  C₆/binding + check a1/a2 refit (RQ5).
 
