@@ -848,3 +848,42 @@ C₆/binding-energy data (the "which is best" question — needs a benchmark set
 e.g. ionic-solid lattice energies or molecular C₆); (2) **a1/a2 refit** check
 (RQ5; FI needed none); (3) extend 2A to multiply-charged ions + dynamic α(iω)
 for full periodic-table deployment; (4) molecular HI-XDM regression test (#36).
+
+### 2026-05-30p — Stage 2 A/B/C ported to the periodic grid path (commit c954bdd9)
+AP wants validation on **molecules AND solids** (the routes may differ —
+FI's big wins are in ionic solids). The molecular Stage-2 lived only in
+`xdm_wfn`; the grid/periodic path (`xdm_grid`) used neutral `alpha_free`.
+Ported via a shared module function **`chargeaware_atpol(iz,q,vaim,vfree0,
+ialpha)`** (routes 1/2/3) so molecules and solids use identical formulas.
+`xdm_grid` now parses `alpharef gould|scale|compute`, loads the reference
+cache (`hirsh_i_prepare` with the converged `bashi%hi_qfinal`), and replaces
+neutral α per atom (per-nneq HI charge via `icel_nneq`); prints
+Q/V_AIM/a_neutscal/α_AIM. Builds clean; grid HI regression passes; default
+unchanged. **Code-complete but not yet physically validated**: the uniform
+molecular-as-grid test vehicle gives garbage HI charges (Na −3.97; the
+all-electron cusp/aliasing §f problem), so it only confirms the code path
+runs. **Real-solid validation needs proper periodic pseudopotential/PAW grid
+densities (QE)** — task #40.
+
+### 2026-05-30q — Stage 2C-rigorous (Sternheimer) feasibility confirmed; plan
+AP: build the full confined-ion polarizability solve **now** (upgrade 2C
+beyond the Kirkwood estimator). Feasibility CONFIRMED — our patched QE
+`ld1.x` can output everything needed on the log grid:
+- **`file_chi`** → the all-electron radial orbitals R_{nl}(r) (already used:
+  `ld1.wfc`).
+- **`file_potscf`** → the converged self-consistent KS potential v_KS(r).
+So we have orbitals + potential + grid for the confined ion (same box that
+regularizes the density). Plan (radial coupled-perturbed KS / Sternheimer):
+for each occupied (n,l), the dipole field z=r cosθ couples to l±1; solve the
+inhomogeneous radial ODE `(ĥ_{l'} − ε_{nl})(r·δu) = −(r·R_{nl})·⟨l'|cosθ|l⟩`
+with `ĥ_{l'} = −½ d²/dr² + l'(l'+1)/2r² + v_KS(r)` and the **box boundary
+condition δu(rmax)=0** (this is what makes the anion α finite — the same
+regularization as the density); then `α = (2/3)Σ_occ (ang)² ∫ R_{nl} δu r³ dr`.
+Start with the **uncoupled (independent-particle)** solve (no δv_Hxc
+self-consistency) — already a real improvement over Kirkwood and a clean
+first target; add the coupled Hartree+XC response (TDDFT-level, what Gould
+2A used) as a second step. **Validation gate:** reproduce known *neutral*
+free-atom α (e.g. H 4.5, Ne 2.67, Ar 11.1 a₀³) before trusting ion values.
+This is a standalone numerical build (tool in `tools/wfc_generator/`,
+producing an α(Z,q) table critic2 ingests like the GB table) — the dedicated
+next work item (task #42).
