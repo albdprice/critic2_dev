@@ -920,3 +920,37 @@ Kirkwood; cation-exact vs GB). Absolute accuracy would need the coupled
   (like the GB arrays) and wire as the rigorous 2C reference (replacing/
   augmenting the inline Kirkwood). Minor harness fix: robust stdout-occupation
   parse; `ok` now keys off "reached in" not the fragile "convergence" string.
+
+### 2026-05-30s — Sternheimer α table batch-generated + embedded (commit 755c6e42)
+Built `tools/wfc_generator/batch_sternheimer.py`: drives the Sternheimer
+generator over the periodic table at **rmax = 3.6·R99** (the HI
+density-reference box, read per element from the neutral `.wfc`), computing
+the neutral-calibrated charge factors `rstern(Z,q)=α_stern(Z,q)/α_stern(Z,0)`
+for q=0,±1. Embedded as `rstern_p1`, `rstern_m1` in param.F90 (Z≤18 computed;
+Z>18 → 1.0; provenance `dat/xdm_ion_alpha_sternheimer.dat`). New keyword
+`alpharef stern` (route 4, shared molecular+grid via `chargeaware_atpol`):
+`α_free(Q)=α_free^CRC(Z)·rstern` (interp in N), `α_AIM=α_free(Q)·V_AIM/V_free(Q)`.
+- **Cation ratios match GB TDDFT essentially exactly** (Li⁺ 0.0012, Na⁺
+  0.0067) — the rigorous self-contained route. Diffuse alkali/alkaline/noble
+  *anion* ratios are unphysical (He⁻ 431, Ne⁻ 138; the extra e⁻ barely binds)
+  but **never used** (those elements aren't anions) — capped at 8 defensively.
+  Real molecular anions sensible: O⁻ 2.38, F⁻ 2.82, Cl⁻ 2.45, N⁻ 2.63.
+
+**Four charge-aware α routes now in-code (per-atom α, a₀³):**
+
+| atom (Q) | neutral | 2A Gould | 2B scale | 2C Kirkwood | 2C-stern |
+|---|---|---|---|---|---|
+| Na (+0.89) | 22.7 | 14.4 | 9.3 | 14.7 | 14.4 |
+| Li (+0.93) | 6.8 | 5.5 | 4.3 | 1.5 | 5.5 |
+| Cl (−0.89) | 21.3 | 23.3 | 27.8 | 22.5 | 27.5 |
+| F (−0.93)  | 6.5 | 9.0 | 9.7 | 6.5 | 6.4 |
+
+2C-stern matches 2A for cations (Sternheimer cation ratios ≈ GB) and tracks
+our confined anions (Cl higher than 2A's frozen-orbital value). **Keyword
+map:** `hirshfeld_i [volonly] [volref] [alpharef gould|scale|compute|stern]
+[wfcdir]` — all gated, default unchanged, regression green. Limited to Z≤18
+(rows 1–3) for the Sternheimer table; extend `_CONF` for rows 4–6.
+- **Stage 2C-rigorous (Sternheimer) is DONE.** Remaining program: validate
+  all routes vs reference C₆/binding on molecules (#41) AND ionic solids
+  (needs QE crystal densities, #40); a1/a2 refit (#43); extend tables to
+  rows 4–6 + multiply-charged/dynamic (#44); regression test (#36).
