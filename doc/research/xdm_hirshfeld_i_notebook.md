@@ -1051,3 +1051,24 @@ rebuild QE in a container on dev-srv. critic2 side (the XDM grid + A/B/C
 routes) is ready; only the periodic-density generation is blocked on a
 working QE. NaCl rocksalt SCF input drafted at `/tmp/nacl_solid/` (a=10.6577
 bohr, ibrav=2, ecutrho=480, PAW) — ready to run once QE works.
+
+### 2026-05-30w — solids: QE-only route (no VASP), pp.x AE reconstruction is viable
+AP has **no VASP** → must use Quantum ESPRESSO. The blocker was the
+all-electron density `rhoae` that the Hirshfeld-I partition needs (VASP gives
+it as AECCAR0+AECCAR2). Resolved: QE **`pp.x` can reconstruct the
+all-electron valence charge** (binary strings: "Reconstructing all-electron
+valence charge", `pp_augmentation`) — so `rhoae` is obtainable from QE+PAW.
+critic2's grid path takes `rho` (valence) + `rhoae` (AE) + `elf`/`b`
+(`xdm grid rho … rhoae … elf …`); with `rhoae` provided it doesn't need a
+separate `core` (xdm@proc l.434). So the QE route works without VASP.
+- dev-srv apt `pw.x` is FORTIFY-broken; building `pw.x`+`pp.x` from the QE 7.2
+  source already on dev-srv (`/tmp/qe-build/q-e-qe-7.2`, same tree that built
+  our `ld1.x`). The ionic cells are tiny (2-atom rocksalt) → can run on
+  dev-srv directly; HPC (submission agent) reserved for scale/the full sets.
+- **Plan:** (1) build pw/pp; (2) run NaCl scf+pp.x, NAIL the exact
+  QE→critic2 charge-aware XDM-grid recipe (pp.x plot_num/augmentation flags
+  for rho, rhoae, elf; FFT grid → `load as`); (3) sweep the 6 routes, get the
+  first ionic-solid cohesive-energy comparison; (4) THEN package the *verified*
+  recipe + structures for the submission agent to run the full ionic-solid set
+  (LiF/NaF/NaCl/KCl/MgO/CaO …) + scale on the HPC. Verify-then-package, so no
+  wasted HPC runs.
