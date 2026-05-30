@@ -535,3 +535,59 @@ H₂O −1.207e-4 → −8.39e-5. Default XDM path + grid regression test unchan
   whether the larger anion volumes/uncapped α need an XDM a1/a2 refit
   (Stage 1 #31, Stage 2 #32). The SCF-stability blocker (#34) is closed.
 
+### 2026-05-30j — Option M benchmark (neutral vs HI vs HI-VOLONLY) + postg validation
+Ran all four test molecules in the three molecular-XDM modes (PBE, a1=0.4
+a2=2.5, `meshtype franchini small`, `ld1_pbe` references). The VOLONLY
+ablation is *clean*: it reproduces the neutral `<M1²>` exactly while using
+the HI volume — so the volume effect and the moment effect are cleanly
+separable.
+
+Per-atom volume ratio V/Vfree (neutral → HI):
+
+| atom | neutral | HI | direction |
+|---|---|---|---|
+| Na (NaCl) | 0.404 | **0.140** | cation contracts hard |
+| Cl (NaCl) | 1.121 | **1.449** | anion expands past 1 |
+| Li (LiF)  | 0.243 | **0.041** | cation contracts hard |
+| F (LiF)   | 1.094 | **1.735** | anion expands past 1 |
+| O (H₂O)   | 0.910 | **1.236** | gains (net −0.87 charge) |
+| H (H₂O)   | 0.634 | **0.324** | contracts (cationic) |
+| C (CH₄)   | 0.765 | **0.973** | mild (slightly anionic) |
+| H (CH₄)   | 0.685 | **0.582** | mild contraction |
+
+The anion ratios >1 are exactly what the old `min(ratio,1)` cap clipped.
+The HI weights also reshape the moments: `<M1²>` anion up (Cl 12.06→14.77,
+F 5.97→8.33, O 5.25→6.61), cation/H down (Na 6.88→4.38, H 1.44→0.84).
+
+Total dispersion energy E_disp (Ha): neutral / HI / HI-VOLONLY
+- NaCl: −1.151e-3 / −9.520e-4 / −1.110e-3
+- LiF : −1.955e-4 / −1.183e-4 / −2.110e-4
+- H₂O : −2.255e-4 / −1.535e-4 / −1.860e-4
+- CH₄ : −8.252e-4 / −7.718e-4 / −7.935e-4
+
+Pattern: **HI reduces |E_disp|** for all four; the strong cation
+contraction (Na, Li, H) outweighs the anion expansion in the C6 sum.
+HI-VOLONLY sits between neutral and HI (the volume change alone is the
+larger of the two effects; the moment reshaping adds on top). Whether the
+reduction is an *improvement* needs reference C6/binding data — that is the
+Stage 1/2 + benchmark-set question, not decidable from self-consistency
+alone.
+
+**postg cross-check (neutral baseline, the reference molecular XDM code,
+`~/projects/postg/postg 0.4 2.5 NaCl.fchk pbe`):**
+
+| | M1²(Na) | M1²(Cl) | V(Na) | V(Cl) | E_disp |
+|---|---|---|---|---|---|
+| postg | 6.848 | 12.089 | 44.99 | 74.55 | −1.1601e-3 |
+| critic2 | 6.876 | 12.060 | 46.08 | 74.39 | −1.1511e-3 |
+
+Agreement: volumes ~2%, moments ~0.4%, E_disp 0.8% (residual = mesh:
+postg's default vs critic2 franchini small). **critic2's neutral molecular
+path is validated against postg.** postg's *neutral Hirshfeld* charges
+(Na ±0.566) vs our **HI** charges (±0.888) also confirm HI amplifies
+charge transfer over plain Hirshfeld, as documented.
+
+Inputs saved on dev-srv: `/tmp/xdmtest/{h2o,LiF,CH4,NaCl}_{neu,mhi,vol}.cri`.
+Conclusion: Option M is verified, self-consistent, and reference-validated
+on the neutral limit. Proceed to Stage 1.
+
