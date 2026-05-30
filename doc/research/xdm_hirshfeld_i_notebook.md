@@ -311,3 +311,45 @@ so these are *raw partition* changes, not validated energies. Whether
 they improve accuracy needs reference C6 and the Stage-1/2 reference
 atom (the hard part). Ionic set (LiF, NaCl) + CH4 next.
 
+### 2026-05-30f — KEY FINDING: uniform-grid HI SCF is unreliable for
+### all-electron *molecular* densities (ionic set blocked, reframed)
+Ran the ionic set (LiF, NaCl) + CH4 through the same molecular wfn→grid
+pipeline. **The Hirshfeld-I SCF gives grid/box-dependent garbage charges**
+for anything but compact molecules:
+
+NaCl, converged HI charges vs molecular-box border (bohr) / grid:
+| border | grid | sum(Q) | Q(Na) | Q(Cl) |
+|---|---|---|---|---|
+| 6  | 100 | −4.19 | −0.80 | −3.39 |
+| 10 | 120 | +0.19 | +0.47 | −0.28 |
+| 16 | 160 | +2.42 | +1.70 | +0.71 |
+
+This is **not convergence** — it is two opposing errors crossing:
+- small box → **periodic aliasing** of the diffuse density tails →
+  over-counted electrons → Q too negative;
+- large box (coarser spacing at fixed N) → **nuclear-cusp undersampling**
+  of the all-electron density → lost core electrons → Q too positive.
+They cancel near border≈10, but there is no robust plateau. Water (tiny,
+compact) sat in the good regime by luck (sum Q = 0.005), so the §e water
+result stands; LiF/NaCl/CH4 on a uniform grid do **not**.
+
+**Root cause & reframe.** critic2's `xdm grid` is designed for periodic
+**planewave/pseudopotential** densities — smooth valence, *no
+all-electron cusps* — where a uniform grid integrates cleanly. Forcing an
+all-electron molecular wavefunction onto a uniform grid for the HI SCF is
+the wrong tool. Two correct ways forward:
+- **(P) Native substrate — planewave ionic solids** (MgO, NaCl, LiF) from
+  QE/VASP: smooth densities, uniform grid is appropriate, *and* this is
+  the regime where charge-aware XDM matters most (TS+HI/FI evidence). The
+  current `XDM GRID HIRSHFELD_I` code applies directly.
+- **(M) Mesh-based molecular HI** — port the HI SCF + weight evaluation to
+  the atom-centred mesh used by the analytic `xdm_wfn` path (`meshmod`,
+  Franchini grids), which handles cusps by construction. Bigger code
+  change, but gives clean molecular benchmarks (LiF, NaCl, organics).
+
+Decision pending (user/Alberto/Erin): pursue (P), (M), or both. The
+Stage-0 grid code is correct and stays; it is the molecular *uniform-grid*
+input that is inadequate, not the partitioning. This belongs in the paper
+as a methods caveat: HI-XDM volumes require an integration grid that
+resolves the reference density used in the SCF.
+
