@@ -262,11 +262,17 @@ contains
     integer :: nca, iat, iter, i1, i2, i3, ii, iz, isp
     integer :: nat
     integer, allocatable :: nid(:), lvec(:,:)
-    real*8, allocatable :: dist(:), rcutmax(:,:)
+    real*8, allocatable :: dist(:), rcutmax(:,:), qflo(:)
     real*8, allocatable :: nelec(:), vat(:), qprev(:)
-    real*8 :: x0(3), xdelta(3,3), rho_i, rho_promol, dQ, dQmax, fac
+    real*8 :: x0(3), xdelta(3,3), rho_i, rho_promol, dQ, dQmax, fac, qraw
     real*8 :: rho_lo, rho_hi
     logical :: converged
+    character(len=:), allocatable :: wfcdir
+    ! Stabilization (mirrors the mesh path, xdm_wfn / task #34): linear charge
+    ! mixing + an element-aware per-iteration anion clamp so the SCF cannot run
+    ! to the diffuse references near the cache floor. Without these the bare
+    ! grid iteration diverges for ionic systems (e.g. NaCl: Na -> -5).
+    real*8, parameter :: hi_beta = 0.5d0
 
     if (.not.s%isinit) call ferror("hirsh_i_driver","system not initialized",faterr)
     if (.not.allocated(s%c)) call ferror("hirsh_i_driver","no crystal",faterr)
@@ -276,12 +282,23 @@ contains
     ! allocate / reset SCF state on bas (mirrors how YT stores bas%luw)
     call hirsh_i_cleanup(bas)
     allocate(bas%hi_qlo(nca), bas%hi_qhi(nca), bas%hi_frac(nca), bas%hi_qfinal(nca))
-    allocate(nelec(nca), vat(nca), qprev(nca))
+    allocate(nelec(nca), vat(nca), qprev(nca), qflo(nca))
     bas%hi_qlo = 0
     bas%hi_qhi = 0
     bas%hi_frac = 0d0
     bas%hi_qfinal = 0d0
     qprev = 0d0
+
+    ! element-dependent anion floor (most-negative available reference)
+    wfcdir = ""
+    if (allocated(bas%hi_wfcdir)) then
+       if (len_trim(bas%hi_wfcdir) > 0) wfcdir = trim(bas%hi_wfcdir)
+    end if
+    do iat = 1, nca
+       iz = s%c%spc(s%c%atcel(iat)%is)%z
+       if (iz < 1) then; qflo(iat) = 0d0; cycle; end if
+       qflo(iat) = hirsh_i_qfloor(iz,wfcdir)
+    end do
 
     ! grid step vectors
     do ii = 1, 3
@@ -361,21 +378,22 @@ contains
        nelec = nelec * s%c%omega / product(bas%n)
        vat = vat * s%c%omega / product(bas%n)
 
-       ! update per-cellatom Q and (qlo,qhi,frac)
+       ! update per-cellatom Q with linear mixing + element-aware clamp
        dQmax = 0d0
        do iat = 1, nca
           iz = s%c%spc(s%c%atcel(iat)%is)%z
-          bas%hi_qfinal(iat) = real(iz,8) - nelec(iat)
-          ! clamp Q into [-hi_qoff, iz) so qlo/qhi stay in cache range.
-          ! qhi may equal iz (fully-stripped ion); interp returns 0 there,
-          ! which is the physically correct empty-density limit.
-          if (bas%hi_qfinal(iat) < -dble(hi_qoff)) bas%hi_qfinal(iat) = -dble(hi_qoff) + 1d-3
+          qraw = real(iz,8) - nelec(iat)               ! bare HI update
+          dQ = abs(qraw - qprev(iat))                  ! residual (convergence measure)
+          if (dQ > dQmax) dQmax = dQ
+          ! damp, then clamp to [qflo, iz-1d-3]: the element-dependent anion
+          ! floor stops Q escaping to the diffuse/best-effort references near
+          ! the cache floor; the cation side is bounded by the bare nucleus.
+          bas%hi_qfinal(iat) = qprev(iat) + hi_beta * (qraw - qprev(iat))
+          if (bas%hi_qfinal(iat) < qflo(iat)) bas%hi_qfinal(iat) = qflo(iat)
           if (bas%hi_qfinal(iat) > dble(iz) - 1d-3) bas%hi_qfinal(iat) = dble(iz) - 1d-3
           bas%hi_qlo(iat) = floor(bas%hi_qfinal(iat))
           bas%hi_qhi(iat) = bas%hi_qlo(iat) + 1
           bas%hi_frac(iat) = bas%hi_qfinal(iat) - dble(bas%hi_qlo(iat))
-          dQ = abs(bas%hi_qfinal(iat) - qprev(iat))
-          if (dQ > dQmax) dQmax = dQ
        end do
 
        ! status line
@@ -401,7 +419,7 @@ contains
     end if
     write (uout,*)
 
-    deallocate(nelec,vat,qprev)
+    deallocate(nelec,vat,qprev,qflo)
     if (allocated(rcutmax)) deallocate(rcutmax)
 
   end subroutine hirsh_i_driver
@@ -441,6 +459,7 @@ contains
     if (associated(glo)) call glo%interp(dist,rlo,rdum1,rdum2)
     if (associated(ghi)) call ghi%interp(dist,rhi,rdum1,rdum2)
     rho = (1d0 - fr) * rlo + fr * rhi
+    if (rho < 0d0) rho = 0d0   ! cubic spline of a box-confined ref can undershoot <0
 
   end subroutine hirsh_i_eval
 

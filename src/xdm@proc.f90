@@ -206,7 +206,7 @@ contains
 
     logical :: ok, dopro, docor
     character(len=:), allocatable :: word
-    integer :: lp, irho, itau, ielf, ipdens, icor, ilap, igrad, irhoae, ib
+    integer :: lp, irho, itau, ielf, ipdens, icor, ilap, igrad, irhoae, ib, iae, iold_iref
     integer :: i, j, k, l, n(3), ntot, ii, jj, nn, m1, m2
     real*8 :: x(3), rhoat, rhocore, rdum1(3), rdum2(3,3), maxc6
     real*8 :: rhos, rhot, grho, lap, taus, ds, qs, rhs, xroot, xshift, xold, expx
@@ -627,7 +627,30 @@ contains
        if (allocated(bashi%f)) deallocate(bashi%f)
        allocate(bashi%f(n(1),n(2),n(3)))
        bashi%f = sy%f(ipdens)%grid%f   ! seed with the neutral promolecular density
-       call hirsh_i_driver(sy,bashi)   ! SCF; fills bashi%f with the HI promolecular density
+       ! The HI population integral must use the ALL-ELECTRON density (so it
+       ! integrates to N and matches the all-electron atomic references);
+       ! the raw reference field is the valence (pseudo) density for a
+       ! pseudopotential calc. Use rhoae if provided, else reconstruct
+       ! AE = rho(valence) + core (core built from ZPSP above). Point the
+       ! driver at it via a temporary reference swap.
+       iae = sy%iref
+       if (irhoae > 0) then
+          iae = irhoae
+       elseif (icor > 0) then
+          iae = sy%getfieldnum()
+          if (allocated(sy%f(iae)%grid)) deallocate(sy%f(iae)%grid)
+          allocate(sy%f(iae)%grid)
+          allocate(sy%f(iae)%grid%f(n(1),n(2),n(3)))
+          sy%f(iae)%grid%n = n
+          sy%f(iae)%grid%f = sy%f(irho)%grid%f + sy%f(icor)%grid%f
+          sy%f(iae)%isinit = .true.
+          nclean = nclean + 1
+          iclean(nclean) = iae
+       end if
+       iold_iref = sy%iref
+       sy%iref = iae
+       call hirsh_i_driver(sy,bashi)   ! SCF on the AE density; fills bashi%f
+       sy%iref = iold_iref
        allocate(phi_hi(n(1),n(2),n(3)))
        phi_hi = bashi%f
        allocate(icel_nneq(sy%c%nneq))
