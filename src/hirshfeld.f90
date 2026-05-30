@@ -32,6 +32,7 @@ module hirshfeld
   ! mesh / charge-aware reference helpers (used by molecular HI-XDM)
   public :: hirsh_i_prepare
   public :: hirsh_i_refrho
+  public :: hirsh_i_qfloor
   public :: hirsh_i_cache_clean
 
   interface
@@ -85,6 +86,11 @@ module hirshfeld
        real*8, intent(in) :: qreal, dist
        real*8 :: rho
      end function hirsh_i_refrho
+     module function hirsh_i_qfloor(iz,wfcdir) result(qf)
+       integer, intent(in) :: iz
+       character(len=*), intent(in) :: wfcdir
+       real*8 :: qf
+     end function hirsh_i_qfloor
      module subroutine hirsh_i_cache_clean()
      end subroutine hirsh_i_cache_clean
   end interface

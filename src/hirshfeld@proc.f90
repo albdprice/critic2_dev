@@ -595,6 +595,40 @@ contains
     end do
   end subroutine hirsh_i_prepare
 
+  !> Most-negative integer charge for which element iz has a real anion
+  !> reference (file in wfcdir). Returns 0.0 if no anion reference exists.
+  !> Used to clamp the Hirshfeld-I SCF to the physically/database-available
+  !> anion range so Q cannot escape to the best-effort/extrapolated
+  !> references that destabilize the iteration (e.g. Cl has q-1 but not
+  !> q-2: halogens do not bind a second electron). Only the WFCDIR file
+  !> set is probed -- without a WFCDIR the conservative floor is -1.
+  module function hirsh_i_qfloor(iz,wfcdir) result(qf)
+    use tools_io, only: lower, nameguess, string
+    use param, only: dirsep, maxzat
+    integer, intent(in) :: iz
+    character(len=*), intent(in) :: wfcdir
+    real*8 :: qf
+
+    integer :: q
+    character(len=:), allocatable :: base, symstr
+    logical :: exist
+
+    qf = 0d0
+    if (iz <= 0 .or. iz > maxzat) return
+    if (len_trim(wfcdir) <= 0) then
+       qf = -1d0   ! no WFCDIR: built-in path is only reliable to q=-1
+       return
+    end if
+    symstr = trim(lower(nameguess(iz,.true.)))
+    do q = -1, -hi_qoff, -1
+       base = trim(wfcdir) // dirsep // symstr // "_q" // trim(string(q))
+       inquire(file=base//".rho",exist=exist)
+       if (.not.exist) inquire(file=base//".wfc",exist=exist)
+       if (.not.exist) exit
+       qf = dble(q)
+    end do
+  end function hirsh_i_qfloor
+
   !> Charge-aware reference density of element iz at fractional charge
   !> qreal, distance dist. Linear interpolation between the bracketing
   !> integer-charge reference grids (must be preloaded via
@@ -619,6 +653,11 @@ contains
     if (associated(glo)) call glo%interp(dist,rlo,d1,d2)
     if (associated(ghi)) call ghi%interp(dist,rhi,d1,d2)
     rho = (1d0 - fr) * rlo + fr * rhi
+    ! densities are non-negative; the cubic spline of a box-confined ld1
+    ! reference can undershoot below zero near the confinement cutoff, which
+    ! would make the Hirshfeld-I promolecule (sum of refrho) tiny/negative at
+    ! a point and blow up the weight refrho/phihi. Floor it.
+    if (rho < 0d0) rho = 0d0
   end function hirsh_i_refrho
 
   !> Free the shared (z,q) reference-density cache.

@@ -1270,7 +1270,7 @@ contains
     use meshmod, only: mesh
     use fieldmod, only: type_wfn, type_dftb
     use grid1mod, only: grid1, agrid
-    use hirshfeld, only: hirsh_i_prepare, hirsh_i_refrho, hirsh_i_cache_clean
+    use hirshfeld, only: hirsh_i_prepare, hirsh_i_refrho, hirsh_i_qfloor, hirsh_i_cache_clean
     use global, only: mesh_type, mesh_level
     use tools_io, only: faterr, ferror, uout, string, fopen_scratch, warning, fclose, nameguess
     use param, only: bohrtoa, im_rho, im_null, im_b, icrd_cart
@@ -1286,12 +1286,22 @@ contains
     integer :: prop(7), i, j, lu, luh, iz, iter
     real*8 :: rho, rhop, rhopp, x(3), r, a1, a2, nn, rb
     real*8 :: dum1(3), dum2(3,3), dqmax, ni, wmom, wvol, refh
-    real*8, allocatable :: mm(:,:), v(:), qcel(:), qnew(:), phihi(:), prneu(:)
+    real*8, allocatable :: mm(:,:), v(:), qcel(:), qnew(:), phihi(:), prneu(:), qflo(:)
     logical :: lhi, lhimom
     character(len=:), allocatable :: wfcdir
     integer, parameter :: hi_maxit = 120
     real*8, parameter :: hi_tol = 1d-4
-    real*8, parameter :: hi_beta = 0.5d0   ! linear charge-mixing factor
+    real*8, parameter :: hi_beta = 0.3d0   ! linear charge-mixing factor
+    logical, parameter :: xdm_hi_verbose = .false. ! per-iteration SCF trace (debug)
+    ! Physical per-iteration charge clamp. The bare HI iteration for ionic
+    ! systems can drive Q to the diffuse, best-effort references near the
+    ! cache clamp (Q->-5): those have w~1 everywhere, so the atom grabs all
+    ! the density and Q runs away (positive feedback). Real HI charges sit
+    ! inside [-2,0] (Cl~-0.8, O~-0.7, F~-0.9), so clamping the anion side to
+    ! -2 never binds at the fixed point but removes the runaway. The cation
+    ! side is self-limiting (stripping makes the ref more compact). The
+    ! anion floor is element-dependent (most-negative available reference:
+    ! Cl->-1, O->-2) and set from hirsh_i_qfloor into qflo(:) below.
 
     ! allocate space for the calculations
     allocate(mm(3,sy%c%ncel),v(sy%c%ncel))
@@ -1425,8 +1435,14 @@ contains
        ! populations integrate to N (unlike a uniform grid). Reference
        ! densities are charge-matched (hirsh_i_refrho), drive both volumes
        ! and (by default) the exchange-hole moments. No min(ratio,1) cap.
-       allocate(qcel(sy%c%ncel),qnew(sy%c%ncel),phihi(m%n))
+       allocate(qcel(sy%c%ncel),qnew(sy%c%ncel),phihi(m%n),qflo(sy%c%ncel))
        qcel = 0d0
+       ! element-dependent anion floor: most-negative available reference
+       do i = 1, sy%c%ncel
+          iz = sy%c%spc(sy%c%atcel(i)%is)%z
+          if (iz < 1) then; qflo(i) = 0d0; cycle; end if
+          qflo(i) = hirsh_i_qfloor(iz,wfcdir)
+       enddo
        write (uout,'("+ Charge-aware XDM (Hirshfeld-I), mesh SCF")')
        if (lhimom) then
           write (uout,'("  HI weights drive volumes AND exchange-hole moments")')
@@ -1459,6 +1475,17 @@ contains
           ! linear charge mixing: the bare HI iteration oscillates/diverges
           ! for strongly ionic systems (diffuse anion references); damp it.
           qcel = qcel + hi_beta * (qnew - qcel)
+          ! physical clamp so Q cannot escape to the diffuse references near
+          ! the cache floor (runaway); never binds at the real fixed point.
+          do i = 1, sy%c%ncel
+             iz = sy%c%spc(sy%c%atcel(i)%is)%z
+             if (iz < 1) cycle
+             qcel(i) = min(max(qcel(i), qflo(i)), dble(iz) - 1d-3)
+          enddo
+          if (xdm_hi_verbose) &
+             write (uout,'("  [HI iter ",A,"] max|dQ| = ",A,"  Q = ",10(A,X))') &
+             string(iter), string(dqmax,'e',decimal=3), &
+             (string(qcel(i),'f',decimal=4),i=1,min(sy%c%ncel,10))
           if (dqmax < hi_tol) exit
        enddo
        write (uout,'("  HI SCF converged in ",A," iterations, max|dQ| = ",A)') &
