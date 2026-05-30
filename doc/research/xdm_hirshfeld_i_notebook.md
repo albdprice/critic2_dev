@@ -1178,3 +1178,44 @@ xdm grid rho val elf elf rhoae?(omit) xa1 a1 xa2 a2 hirshfeld_i
 alpharef gould|scale|stern wfcdir <ld1_pbe>`. No rhoae needed (core
 reconstructed from ZPSP; HI uses valence). Solids + molecules now both work.
 NEXT: package this for the submission agent → full alkali-halide/oxide set.
+
+### 2026-05-30aa — HEADLINE: ionic-solid cohesive-energy validation (6 solids)
+Full QE→critic2 charge-aware XDM across the alkali-halide + oxide set, at the
+experimental rocksalt lattice constants. Pipeline: source-built QE 7.2
+PBE-PAW SCF (kjpaw_psl 1.0.0 pseudos) → pp.x plot_num=0 (valence ρ) + 8 (ELF)
+→ critic2 `xdm grid … hirshfeld_i alpharef gould|scale|stern` (ZPSP-valence
+HI, no rhoae); free-atom PBE energies (spin-polarized, isolated, degauss=0.01)
+for the cohesive reference. Scripts + raw output in
+`doc/research/solid_validation/`.
+
+**Cohesive energy E_coh = (E_cat+E_an) − (E_bulk + E_disp), eV/f.u.:**
+
+| solid | PBE | neutral | 2A gould | 2B scale | 2C stern | exp | HI q(cat/an) |
+|---|---|---|---|---|---|---|---|
+| LiF | 8.77 | 9.59 | 9.25 | 9.05 | 8.90 | 8.75 | +1.02/−1.00 |
+| NaF | 7.75 | 8.66 | 8.10 | 8.02 | 7.87 | 7.86 | +1.05/−1.00 |
+| NaCl | 6.15 | 7.05 | 6.60 | 6.58 | 6.47 | 6.62 | +1.02/−1.00 |
+| KCl | 6.27 | 7.71 | 6.57 | 6.71 | 6.61 | 6.70 | +1.03/−1.00 |
+| MgO | 10.25 | 11.06 | 10.56 | 10.80 | 10.65 | 10.30 | +2.13/−2.00 |
+| CaO | 11.19 | 12.66 | 11.59 | 11.75 | 11.79 | 11.00 | +2.07/−2.00 |
+
+**MAE / MSE vs exp (eV):** PBE 0.21/−0.14 · **neutral 0.92/+0.92** · gould
+0.29/+0.24 · scale 0.30/+0.28 · **stern 0.26/+0.18**.
+
+**KEY RESULT:** neutral-Hirshfeld XDM over-binds EVERY ionic solid by a
+systematic +0.92 eV (MSE=MAE → purely one-directional over-binding), because
+it over-counts the neutral cation polarizability. **Charge-aware references
+cut the error ~3.5× (0.92→0.26) and eliminate the systematic bias**
+(+0.92→+0.18); 2C-stern best. This is the FI thesis, quantitatively
+reproduced in critic2. Exp from Born–Haber (alkali halides solid; oxides
+10.3/11.0 approximate).
+
+**Caveats (report straight):** (1) PBE-alone MAE 0.21 (MSE −0.14, under-binds,
+no dispersion) is competitive for *pure ionic* solids — the fair like-for-like
+is XDM-vs-XDM (neutral 0.92 → charge-aware 0.26); the decisive win for
+charge-aware should come on layered/molecular crystals where dispersion truly
+matters (X23, TMDs — next). (2) a1/a2=(0.4,2.5) NOT refit (RQ5) — absolute XDM
+magnitude would shift with optimal damping; the neutral↔charge-aware gap is
+robust. (3) single fixed-geometry point, no ZPE/thermal/relaxation; grid HI
+slightly over-ionizes (halide anions pin at −1). (4) free-atom degauss=0.01
+smearing entropy ~tens of meV.

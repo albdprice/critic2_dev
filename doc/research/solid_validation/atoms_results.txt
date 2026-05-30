@@ -1,0 +1,10 @@
+# free-atom PBE energies (Ry)
+Li  E= -14.92739814       ok
+F   E= -59.11264707       ok
+Na  E= -109.16973585      ok
+Cl  E= -79.22283559       ok
+K   E= -112.94899127      ok
+Mg  E= -141.28519787      ok
+Ca  E= -133.38021383      ok
+O   E= -41.27494587       ok
+ATOMS DONE
