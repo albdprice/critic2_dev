@@ -74,14 +74,14 @@ contains
   !> Driver for XDM
   module subroutine xdm_driver(line)
     use global, only: eval_next
-    use tools_io, only: uout, lgetword, equal, ferror, faterr
+    use tools_io, only: uout, lgetword, getword, equal, ferror, faterr
 
     character*(*), intent(inout) :: line
 
-    character(len=:), allocatable :: word, chfw
+    character(len=:), allocatable :: word, chfw, hi_wfcdir
     integer :: lp
     real*8 :: a1, a2, chf
-    logical :: ok
+    logical :: ok, dohi, himoments
 
     ! header
     write (uout,'("* Exchange-hole dipole moment (XDM) dispersion calculation ")')
@@ -136,7 +136,26 @@ contains
              call ferror("xdm_driver","unknown functional",faterr)
        endif
 
-       call xdm_wfn(a1,a2,chf)
+       ! optional charge-aware (Hirshfeld-I) partitioning (research option)
+       dohi = .false.; himoments = .true.; hi_wfcdir = ""
+       do while (.true.)
+          word = lgetword(line,lp)
+          if (equal(word,"hirshfeld_i").or.equal(word,"hi")) then
+             dohi = .true.
+          elseif (equal(word,"volonly").and.dohi) then
+             himoments = .false.
+          elseif (equal(word,"wfcdir").and.dohi) then
+             hi_wfcdir = getword(line,lp)
+             if (len_trim(hi_wfcdir) == 0) &
+                call ferror("xdm_driver","WFCDIR needs a directory",faterr,line,syntax=.true.)
+          elseif (len_trim(word) > 0) then
+             call ferror("xdm_driver","unknown XDM keyword: "//word,faterr,line,syntax=.true.)
+          else
+             exit
+          end if
+       end do
+
+       call xdm_wfn(a1,a2,chf,dohi,himoments,hi_wfcdir)
     end if
 
   end subroutine xdm_driver
@@ -1246,25 +1265,33 @@ contains
 
 
   !> Calculate XDM in molecules and crystals using the wavefunction.
-  subroutine xdm_wfn(a1o,a2o,chf)
+  subroutine xdm_wfn(a1o,a2o,chf,dohi,himoments,hi_wfcdir)
     use systemmod, only: sy
     use meshmod, only: mesh
     use fieldmod, only: type_wfn, type_dftb
     use grid1mod, only: grid1, agrid
+    use hirshfeld, only: hirsh_i_prepare, hirsh_i_refrho, hirsh_i_cache_clean
     use global, only: mesh_type, mesh_level
-    use tools_io, only: faterr, ferror, uout, string, fopen_scratch, warning, fclose
+    use tools_io, only: faterr, ferror, uout, string, fopen_scratch, warning, fclose, nameguess
     use param, only: bohrtoa, im_rho, im_null, im_b, icrd_cart
 
     real*8, intent(in) :: a1o, a2o
     real*8, intent(in) :: chf
+    logical, intent(in), optional :: dohi, himoments
+    character(len=*), intent(in), optional :: hi_wfcdir
 
     type(xdmparams) :: p
     type(mesh) :: m
     integer :: nelec
-    integer :: prop(7), i, j, lu, luh, iz
+    integer :: prop(7), i, j, lu, luh, iz, iter
     real*8 :: rho, rhop, rhopp, x(3), r, a1, a2, nn, rb
-    real*8 :: dum1(3), dum2(3,3)
-    real*8, allocatable :: mm(:,:), v(:)
+    real*8 :: dum1(3), dum2(3,3), dqmax, ni, wmom, wvol, refh
+    real*8, allocatable :: mm(:,:), v(:), qcel(:), qnew(:), phihi(:), prneu(:)
+    logical :: lhi, lhimom
+    character(len=:), allocatable :: wfcdir
+    integer, parameter :: hi_maxit = 120
+    real*8, parameter :: hi_tol = 1d-4
+    real*8, parameter :: hi_beta = 0.5d0   ! linear charge-mixing factor
 
     ! allocate space for the calculations
     allocate(mm(3,sy%c%ncel),v(sy%c%ncel))
@@ -1327,73 +1354,169 @@ contains
     ! fill the mesh with those properties
     call m%fill(sy%f(sy%iref),prop(1:4),.not.sy%c%ismolecule)
 
-    ! fill the promolecular and the atomic densities
-    m%f(:,2:3) = 0d0
-    lu = fopen_scratch()
+    ! charge-aware (Hirshfeld-I) options
+    lhi = .false.; if (present(dohi)) lhi = dohi
+    lhimom = .true.; if (present(himoments)) lhimom = himoments
+    wfcdir = ""; if (present(hi_wfcdir)) wfcdir = trim(hi_wfcdir)
+
     nelec = 0
     do i = 1, sy%c%ncel
        iz = sy%c%spc(sy%c%atcel(i)%is)%z
-       if (iz < 1) cycle
-       nelec = nelec + iz
-
-       do j = 1, m%n
-          x = m%x(:,j) - sy%c%atcel(i)%r
-          r = norm2(x)
-          call agrid(iz)%interp(r,rho,rhop,rhopp)
-          m%f(j,2) = m%f(j,2) + rho
-          m%f(j,3) = rho
-       enddo
-       write (lu) (m%f(j,3),j=1,m%n)
-    enddo
-
-    ! fill the actual periodic promolecular density
-    if (.not.sy%c%ismolecule) then
-       do j = 1, m%n
-          call sy%c%promolecular_atom(m%x(:,j),icrd_cart,rho,dum1,dum2,0)
-          m%f(j,2) = rho
-       enddo
-    end if
-
-    ! create the temporary file with the weights
-    luh = fopen_scratch()
-    rewind(lu)
-    do i = 1, sy%c%ncel
-       iz = sy%c%spc(sy%c%atcel(i)%is)%z
-       if (iz < 1) cycle
-       read (lu) (m%f(j,3),j=1,m%n)
-       write (luh) (max(m%f(j,3),1d-40)/max(m%f(j,2),1d-40),j=1,m%n)
-    enddo
-    call fclose(lu)
-
-    ! integrate the number of electrons
+       if (iz >= 1) nelec = nelec + iz
+    end do
     nn = sum(m%f(:,1) * m%w)
     write (uout,'("nelec          ",A)') string(nelec)
-    write (uout,'("nelec (promol) ",A)') string(sum(m%f(:,2) * m%w),'f',12,6)
     write (uout,'("nelec, total   ",A)') string(nn,'f',12,6)
     if (abs(nn - nelec) > 0.1d0) &
        call ferror("xdm_wfn","inconsistent nelec. I hope you know what you are doing",warning)
 
-    ! calculate moments and volumes
     mm = 0d0
     v = 0d0
-    rewind(luh)
-    do i = 1, sy%c%ncel
-       iz = sy%c%spc(sy%c%atcel(i)%is)%z
-       if (iz < 1) cycle
-       read (luh) (m%f(j,2),j=1,m%n)
-
-       ! calculate hole dipole and moments
-       do j = 1, m%n
-          r = norm2(m%x(:,j)-sy%c%atcel(i)%r)
-          rb = max(0.d0,r-m%f(j,4))
-
-          mm(1,i) = mm(1,i) + m%w(j) * m%f(j,2) * m%f(j,1) * (r-rb)**2
-          mm(2,i) = mm(2,i) + m%w(j) * m%f(j,2) * m%f(j,1) * (r**2-rb**2)**2
-          mm(3,i) = mm(3,i) + m%w(j) * m%f(j,2) * m%f(j,1) * (r**3-rb**3)**2
-          v(i) = v(i) + m%w(j) * m%f(j,2) * m%f(j,1) * r**3
+    if (.not.lhi) then
+       ! ===== standard (neutral Hirshfeld) molecular XDM =====
+       ! fill the promolecular and the atomic densities
+       m%f(:,2:3) = 0d0
+       lu = fopen_scratch()
+       do i = 1, sy%c%ncel
+          iz = sy%c%spc(sy%c%atcel(i)%is)%z
+          if (iz < 1) cycle
+          do j = 1, m%n
+             r = norm2(m%x(:,j) - sy%c%atcel(i)%r)
+             call agrid(iz)%interp(r,rho,rhop,rhopp)
+             m%f(j,2) = m%f(j,2) + rho
+             m%f(j,3) = rho
+          enddo
+          write (lu) (m%f(j,3),j=1,m%n)
        enddo
-    enddo
-    call fclose(luh)
+       if (.not.sy%c%ismolecule) then
+          do j = 1, m%n
+             call sy%c%promolecular_atom(m%x(:,j),icrd_cart,rho,dum1,dum2,0)
+             m%f(j,2) = rho
+          enddo
+       end if
+       luh = fopen_scratch()
+       rewind(lu)
+       do i = 1, sy%c%ncel
+          iz = sy%c%spc(sy%c%atcel(i)%is)%z
+          if (iz < 1) cycle
+          read (lu) (m%f(j,3),j=1,m%n)
+          write (luh) (max(m%f(j,3),1d-40)/max(m%f(j,2),1d-40),j=1,m%n)
+       enddo
+       call fclose(lu)
+       write (uout,'("nelec (promol) ",A)') string(sum(m%f(:,2) * m%w),'f',12,6)
+       rewind(luh)
+       do i = 1, sy%c%ncel
+          iz = sy%c%spc(sy%c%atcel(i)%is)%z
+          if (iz < 1) cycle
+          read (luh) (m%f(j,2),j=1,m%n)
+          do j = 1, m%n
+             r = norm2(m%x(:,j)-sy%c%atcel(i)%r)
+             rb = max(0.d0,r-m%f(j,4))
+             mm(1,i) = mm(1,i) + m%w(j) * m%f(j,2) * m%f(j,1) * (r-rb)**2
+             mm(2,i) = mm(2,i) + m%w(j) * m%f(j,2) * m%f(j,1) * (r**2-rb**2)**2
+             mm(3,i) = mm(3,i) + m%w(j) * m%f(j,2) * m%f(j,1) * (r**3-rb**3)**2
+             v(i)    = v(i)    + m%w(j) * m%f(j,2) * m%f(j,1) * r**3
+          enddo
+       enddo
+       call fclose(luh)
+    else
+       ! ===== charge-aware (Hirshfeld-I) molecular XDM =====
+       ! Mesh-based HI SCF: cusp-safe Becke/Franchini integration, so the
+       ! populations integrate to N (unlike a uniform grid). Reference
+       ! densities are charge-matched (hirsh_i_refrho), drive both volumes
+       ! and (by default) the exchange-hole moments. No min(ratio,1) cap.
+       allocate(qcel(sy%c%ncel),qnew(sy%c%ncel),phihi(m%n))
+       qcel = 0d0
+       write (uout,'("+ Charge-aware XDM (Hirshfeld-I), mesh SCF")')
+       if (lhimom) then
+          write (uout,'("  HI weights drive volumes AND exchange-hole moments")')
+       else
+          write (uout,'("  HI weights drive volumes only (neutral moments)")')
+       end if
+       do iter = 1, hi_maxit
+          call hirsh_i_prepare(sy,qcel,wfcdir)
+          phihi = 0d0
+          do i = 1, sy%c%ncel
+             iz = sy%c%spc(sy%c%atcel(i)%is)%z
+             if (iz < 1) cycle
+             do j = 1, m%n
+                r = norm2(m%x(:,j)-sy%c%atcel(i)%r)
+                phihi(j) = phihi(j) + hirsh_i_refrho(iz,qcel(i),r)
+             enddo
+          enddo
+          dqmax = 0d0
+          do i = 1, sy%c%ncel
+             iz = sy%c%spc(sy%c%atcel(i)%is)%z
+             if (iz < 1) then; qnew(i) = 0d0; cycle; end if
+             ni = 0d0
+             do j = 1, m%n
+                r = norm2(m%x(:,j)-sy%c%atcel(i)%r)
+                ni = ni + m%w(j) * (hirsh_i_refrho(iz,qcel(i),r)/max(phihi(j),1d-40)) * m%f(j,1)
+             enddo
+             qnew(i) = dble(iz) - ni
+             dqmax = max(dqmax,abs(qnew(i)-qcel(i)))
+          enddo
+          ! linear charge mixing: the bare HI iteration oscillates/diverges
+          ! for strongly ionic systems (diffuse anion references); damp it.
+          qcel = qcel + hi_beta * (qnew - qcel)
+          if (dqmax < hi_tol) exit
+       enddo
+       write (uout,'("  HI SCF converged in ",A," iterations, max|dQ| = ",A)') &
+          string(min(iter,hi_maxit)), string(dqmax,'e',decimal=2)
+       call hirsh_i_prepare(sy,qcel,wfcdir)
+       ! HI promolecular density on the mesh
+       phihi = 0d0
+       do i = 1, sy%c%ncel
+          iz = sy%c%spc(sy%c%atcel(i)%is)%z
+          if (iz < 1) cycle
+          do j = 1, m%n
+             r = norm2(m%x(:,j)-sy%c%atcel(i)%r)
+             phihi(j) = phihi(j) + hirsh_i_refrho(iz,qcel(i),r)
+          enddo
+       enddo
+       ! neutral promolecular (only needed for the volonly moment weight)
+       if (.not.lhimom) then
+          allocate(prneu(m%n)); prneu = 0d0
+          do i = 1, sy%c%ncel
+             iz = sy%c%spc(sy%c%atcel(i)%is)%z
+             if (iz < 1) cycle
+             do j = 1, m%n
+                r = norm2(m%x(:,j)-sy%c%atcel(i)%r)
+                call agrid(iz)%interp(r,rho,rhop,rhopp)
+                prneu(j) = prneu(j) + rho
+             enddo
+          enddo
+       end if
+       write (uout,'("nelec (HI promol) ",A)') string(sum(phihi * m%w),'f',12,6)
+       ! volumes (HI weights) and moments (HI weights if lhimom, else neutral)
+       do i = 1, sy%c%ncel
+          iz = sy%c%spc(sy%c%atcel(i)%is)%z
+          if (iz < 1) cycle
+          do j = 1, m%n
+             r = norm2(m%x(:,j)-sy%c%atcel(i)%r)
+             rb = max(0.d0,r-m%f(j,4))
+             refh = hirsh_i_refrho(iz,qcel(i),r)
+             wvol = refh / max(phihi(j),1d-40)
+             if (lhimom) then
+                wmom = wvol
+             else
+                call agrid(iz)%interp(r,rho,rhop,rhopp)
+                wmom = rho / max(prneu(j),1d-40)
+             end if
+             mm(1,i) = mm(1,i) + m%w(j) * wmom * m%f(j,1) * (r-rb)**2
+             mm(2,i) = mm(2,i) + m%w(j) * wmom * m%f(j,1) * (r**2-rb**2)**2
+             mm(3,i) = mm(3,i) + m%w(j) * wmom * m%f(j,1) * (r**3-rb**3)**2
+             v(i)    = v(i)    + m%w(j) * wvol * m%f(j,1) * r**3
+          enddo
+       enddo
+       write (uout,'("Hirshfeld-I charges")')
+       write (uout,'("# i At        Charge")')
+       do i = 1, sy%c%ncel
+          iz = sy%c%spc(sy%c%atcel(i)%is)%z
+          write (uout,'(I3,X,A,X,1p,E18.10)') i, string(nameguess(iz,.true.)), qcel(i)
+       enddo
+       call hirsh_i_cache_clean()
+    end if
 
     ! calculate and print out coefficients
     call calc_coefs(a1,a2,chf,v,mm,p%c6,p%c8,p%c10,p%rvdw)

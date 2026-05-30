@@ -11,6 +11,89 @@ bottom); top sections are the living "paper skeleton."
 
 ---
 
+## 0. CURRENT STATE & HANDOFF (read this first)
+
+**Repo / infra**
+- Dev machine: `dev-srv` (`ssh albd@10.10.49.104`, sudo pw `800127828`).
+- critic2 fork clone: `/home/albd/critic2_dev`; build dir
+  `~/critic2_dev/build` (out-of-source; rebuild `cd build && make -j$(nproc) critic2`).
+- Local mirror used for editing: `/root/critic2_development` (edit here, `scp` to dev-srv, build).
+- Active branch: **`research/xdm-hirshfeld-i`** (fork only; NOTHING pushed
+  to upstream `aoterodelaroza/critic2`). Push: `git push origin research/xdm-hirshfeld-i`.
+- This notebook is the source of truth. §1–7 = paper skeleton; §7 worklog = dated log.
+
+**What is DONE and merged to fork master (earlier work):** HIRSHFELD_I
+keyword + SCF; basindat refactor; Route-1 (Gaussian, `dat/hirshfeld_proatoms/{pbe,pbe0}`)
+and Route-2 (confined ld1.x, `dat/hirshfeld_proatoms/ld1_pbe`, 137 files,
+Z=1–117 q−1 + p-block q−2) anion databases; standardized `rmax=3.6·R99`;
+LiH regression test `tests/009_intgrid/022_hirshfeld_i`. Generators in
+`tools/wfc_generator/`. (See memories `hirshfeld-i-design`, `hirshfeld-i-anion-references`.)
+
+**XDM/HI work — status by stage**
+- **Stage 0 (grid path, `xdm grid … HIRSHFELD_I [VOLONLY] [WFCDIR]`): DONE, committed.**
+  Drops `min(ratio,1)` cap, feeds HI weights to volumes + moments. Validated
+  on water (compact): O V/Vfree 0.90→1.15, C6 O–O +53%. **BUT** uniform-grid
+  HI SCF is unreliable for all-electron *molecular* densities (aliasing vs
+  cusp-loss) — see §f. Grid path is correct for *planewave/pseudopotential*
+  densities only.
+- **postg/xdm_wfn audit: DONE (§g).** Key result: molecular XDM has **NO cap**
+  (postg AND critic2 `calc_coefs`); cap is grid-path-only → Stage-0 removal is
+  consistent, not novel. Both integrate on a Becke/Franchini **mesh** (cusp-safe).
+- **Option M (mesh HI in molecular `xdm_wfn`, `xdm a1 a2 chf HIRSHFELD_I [VOLONLY] [WFCDIR dir]`):
+  IN PROGRESS — code builds, but the SCF DIVERGES for ionic systems.**
+  - Implemented: `hirshfeld` helpers `hirsh_i_prepare(s,qcel,wfcdir)`,
+    `hirsh_i_refrho(iz,qreal,dist)`, `hirsh_i_cache_clean()` + shared loader
+    `hi_cache_load`; keyword parse in `xdm_driver`; mesh HI SCF + HI
+    volume/moment loop + neutral-moment ablation (VOLONLY) in `xdm_wfn`.
+  - **Mesh integration is CORRECT** (NaCl `nelec,total=28.00`, vs grid's 35.6 — the §f problem is solved).
+  - **BLOCKER: the mesh HI SCF oscillates/diverges for NaCl** even with
+    linear charge mixing β=0.5 (max|dQ| → 1e13, Q_Na → −14, wrong sign).
+    Water converges. Root cause: classic HI instability for ionic systems with
+    diffuse/clamped anion references (Q runs to the −5 clamp → Cl⁻⁵-like
+    hugely diffuse reference → runaway). This is "the reference-atom bit"
+    Erin flagged.
+
+**IMMEDIATE NEXT ACTIONS (in order)**
+1. **Stabilize the mesh HI SCF** (file `src/xdm@proc.f90`, `xdm_wfn`, the
+   `do iter=1,hi_maxit` loop; params `hi_beta`, `hi_maxit`, `hi_tol`). Try, in
+   order: (a) much smaller β (0.1–0.2) and/or Anderson/Pulay mixing; (b) clamp
+   Q to a *physical* per-iteration range (e.g. [−2,+Z−1]) so it can't run to
+   the −5 cache clamp; (c) check whether the `ld1_pbe` Cl⁻/Cl²⁻ references are
+   over-diffuse (box-confinement) and whether the runaway is reference-driven;
+   (d) compare to how the *grid* `hirsh_i_driver` behaves on a correctly-
+   normalized ionic density (it never hit this because its density was wrong).
+   Note: the existing grid `hirsh_i_driver` does NOT mix either — it may share
+   this instability; consider centralizing a stable mesh+grid HI SCF.
+2. **Acceptance test:** NaCl → Q(Na)≈+0.8, Q(Cl)≈−0.8, integrate to N, robust.
+   Then H2O / LiF / CH4. Compare neutral vs HI vs HI-VOLONLY: volumes, M1, C6.
+   (Recipe below.)
+3. **Cross-check vs postg** (`~/projects/postg/postg`, neutral only) for the
+   neutral baseline numbers.
+4. Then **Stage 1** (task #31): charge-matched volume reference V_ref(Q) in
+   `calc_coefs`/`xdm_wfn` (FI volume formula; we have ion densities). Then
+   **Stage 2** (#32): ion reference polarizabilities (Gould–Bučko set).
+
+**Molecular HI-XDM run recipe (the working pipeline, via fchk — NOT wfx):**
+```
+# generate fchk:  g09 PBEPBE/def2TZVP opt (chk) -> formchk   (GAUSS_EXEDIR=~/g09 etc.)
+molecule X.fchk
+load X.fchk
+meshtype franchini small
+xdm 0.4 2.5 pbe hirshfeld_i wfcdir /home/albd/critic2_dev/dat/hirshfeld_proatoms/ld1_pbe
+#   add VOLONLY after hirshfeld_i for the neutral-moments ablation; drop
+#   "hirshfeld_i ..." for the neutral baseline.
+```
+Test fchks already on dev-srv in `/tmp/xdmtest/` (h2o, NaCl, LiF, CH4) — but
+`/tmp` may be cleared; regenerate via `/tmp/xdm_bench.py` (geometries inside).
+**Gotchas:** wfx-as-structure reader is buggy (`</`-tag check) → use **fchk**;
+inside a chemical function reference the field by **name** (`gkin($mol)`), not `$1`;
+`gkin($field)` = orbital τ for the BR hole; numpy 2.x uses `np.trapezoid`;
+g09 cubegen mode-5 points are in **Ångström** (don't use — use psi4 collocation or mesh).
+
+---
+
+---
+
 ## 1. Question and motivation
 
 critic2's XDM implementation partitions atomic volumes and exchange-hole
@@ -391,4 +474,21 @@ Hirshfeld weight `ρ_A/promol` → `v(i)`, `mm(l,i)`. To add HI:
    Erin); neutral `frevol/α_free` anchor kept (Stage 0 semantics).
 Keyword: extend the molecular `XDM … chf` form (and/or the `xdm` driver)
 with `HIRSHFELD_I [WFCDIR …]`. Default unchanged.
+
+### 2026-05-30h — M implemented; mesh fixes integration but SCF diverges (ionic)
+Built M in `src/xdm@proc.f90`: helpers `hirsh_i_prepare/refrho/cache_clean`
+(+ shared `hi_cache_load`) in `hirshfeld`; `xdm a1 a2 chf HIRSHFELD_I
+[VOLONLY] [WFCDIR dir]` parsed in `xdm_driver`; mesh HI SCF + HI
+volume/moment loop in `xdm_wfn`. Compiles clean; default path untouched.
+- **Win:** NaCl mesh integrates to `nelec,total = 28.00` (vs the uniform
+  grid's 35.6 in §f) — the cusp/aliasing integration problem is SOLVED by
+  the Becke/Franchini mesh.
+- **Blocker:** the HI SCF **diverges for NaCl**. Bare iteration: max|dQ|
+  ~4.7, wrong-sign charges. With linear mixing β=0.5: WORSE (max|dQ|→1e13,
+  Q_Na→−14). Water converges fine. Diagnosis: HI instability for ionic
+  systems — Q runs toward the −5 cache clamp → Cl⁻⁵-like ultra-diffuse
+  reference → w_Cl≈1 everywhere → runaway. The "reference-atom" hard part
+  (Erin). Next: smaller/Anderson mixing, physical per-iteration Q clamp,
+  and check whether the confined `ld1_pbe` anion refs are over-diffuse.
+  Committed as-is (builds; ionic SCF known-unstable) so state is preserved.
 

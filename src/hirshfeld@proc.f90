@@ -504,78 +504,138 @@ contains
     type(basindat), intent(in) :: bas
 
     integer :: iat, iz
-    character(len=:), allocatable :: fname
-    logical :: exist, have_wfcdir
+    character(len=:), allocatable :: wfcdir
+
+    wfcdir = ""
+    if (allocated(bas%hi_wfcdir)) then
+       if (len_trim(bas%hi_wfcdir) > 0) wfcdir = trim(bas%hi_wfcdir)
+    end if
+    do iat = 1, s%c%ncel
+       iz = s%c%spc(s%c%atcel(iat)%is)%z
+       if (iz <= 0 .or. iz > maxzat) cycle
+       call hi_cache_load(iz, bas%hi_qlo(iat), wfcdir)
+       call hi_cache_load(iz, bas%hi_qhi(iat), wfcdir)
+    end do
+  end subroutine hirsh_i_preload
+
+  !> Load one charged (z,q) atomic reference density into the module
+  !> cache (shared by the grid driver and the mesh/molecular path).
+  !> Resolution: WFCDIR .rho, then WFCDIR .wfc, then built-in read_db
+  !> (cation truncation / anion extrapolation). Serial (allocates the
+  !> cache) -- call before any parallel evaluation.
+  subroutine hi_cache_load(iz, q, wfcdir)
+    use grid1mod, only: grid1_read_rho, grid1_read_file
+    use tools_io, only: lower, nameguess, ferror, warning, string
+    use param, only: dirsep, maxzat
+    integer, intent(in) :: iz, q
+    character(len=*), intent(in) :: wfcdir
+    character(len=:), allocatable :: base, qstr, symstr, fname
+    logical :: exist
 
     if (.not.allocated(hi_cache)) then
        allocate(hi_cache(maxzat, -hi_qoff:hi_qcap))
        allocate(hi_cache_tried(maxzat, -hi_qoff:hi_qcap))
        hi_cache_tried = .false.
     end if
+    if (q == 0) return                                 ! neutral lives in agrid
+    if (iz <= 0 .or. iz > maxzat) return
+    if (q < lbound(hi_cache,2) .or. q > ubound(hi_cache,2)) return
+    if (hi_cache(iz,q)%isinit) return
+    if (hi_cache_tried(iz,q)) return
+    hi_cache_tried(iz,q) = .true.
 
-    have_wfcdir = .false.
-    if (allocated(bas%hi_wfcdir)) then
-       if (len_trim(bas%hi_wfcdir) > 0) have_wfcdir = .true.
+    if (len_trim(wfcdir) > 0) then
+       symstr = trim(lower(nameguess(iz,.true.)))
+       if (q >= 0) then
+          qstr = "_q+" // trim(string(q))
+       else
+          qstr = "_q" // trim(string(q))
+       end if
+       base = trim(wfcdir) // dirsep // symstr // qstr
+       fname = base // ".rho"
+       inquire(file=fname,exist=exist)
+       if (exist) then
+          call grid1_read_rho(hi_cache(iz,q),fname,iz,q)
+          if (hi_cache(iz,q)%isinit) return
+       end if
+       fname = base // ".wfc"
+       inquire(file=fname,exist=exist)
+       if (exist) then
+          call grid1_read_file(hi_cache(iz,q),fname,iz,q)
+          if (hi_cache(iz,q)%isinit) return
+       end if
     end if
+
+    call hi_cache(iz,q)%read_db(iz,q)
+    if (hi_cache(iz,q)%isinit) return
+    call ferror('hi_cache_load', &
+       'Could not load atomic density for z=' // trim(string(iz)) // &
+       ' q=' // trim(string(q)) // '; using neutral',warning)
+  end subroutine hi_cache_load
+
+  !> Preload the integer (z,q) reference grids bracketing each cell
+  !> atom's real charge qcel (serial; call before parallel mesh eval).
+  module subroutine hirsh_i_prepare(s,qcel,wfcdir)
+    use systemmod, only: system
+    use param, only: maxzat
+    type(system), intent(in) :: s
+    real*8, intent(in) :: qcel(:)
+    character(len=*), intent(in) :: wfcdir
+
+    integer :: iat, iz, qlo
+    real*8 :: qr
 
     do iat = 1, s%c%ncel
        iz = s%c%spc(s%c%atcel(iat)%is)%z
        if (iz <= 0 .or. iz > maxzat) cycle
-       call load_one(iz, bas%hi_qlo(iat))
-       call load_one(iz, bas%hi_qhi(iat))
+       qr = hi_clampq(qcel(iat),iz)
+       qlo = floor(qr)
+       call hi_cache_load(iz, qlo, wfcdir)
+       call hi_cache_load(iz, qlo+1, wfcdir)
     end do
+  end subroutine hirsh_i_prepare
 
-  contains
-    subroutine load_one(iz,q)
-      use grid1mod, only: grid1_read_rho
-      integer, intent(in) :: iz, q
-      character(len=:), allocatable :: base, qstr, symstr
+  !> Charge-aware reference density of element iz at fractional charge
+  !> qreal, distance dist. Linear interpolation between the bracketing
+  !> integer-charge reference grids (must be preloaded via
+  !> hirsh_i_prepare). Q is clamped to [-hi_qoff, iz).
+  module function hirsh_i_refrho(iz,qreal,dist) result(rho)
+    use grid1mod, only: agrid
+    integer, intent(in) :: iz
+    real*8, intent(in) :: qreal, dist
+    real*8 :: rho
 
-      if (q == 0) return                                ! neutral lives in agrid
-      if (q < lbound(hi_cache,2) .or. q > ubound(hi_cache,2)) return
-      if (hi_cache(iz,q)%isinit) return
-      if (hi_cache_tried(iz,q)) return
-      hi_cache_tried(iz,q) = .true.
+    integer :: qlo, qhi
+    real*8 :: qr, fr, rlo, rhi, d1, d2
+    type(grid1), pointer :: glo, ghi
 
-      ! WFCDIR lookup: <elem>_q<+|->N with .rho preferred over .wfc.
-      ! Use the trimmed lowercase element symbol (e.g. "o", "cl"), not the
-      ! underscore-padded internal name, so files are named o_q-1.rho etc.
-      ! string(q) already carries the sign for q<0, so prefix "+" only for q>=0.
-      if (have_wfcdir) then
-         symstr = trim(lower(nameguess(iz,.true.)))
-         if (q >= 0) then
-            qstr = "_q+" // trim(string(q))
-         else
-            qstr = "_q" // trim(string(q))
-         end if
-         base = trim(bas%hi_wfcdir) // dirsep // symstr // qstr
+    rho = 0d0
+    if (iz <= 0) return
+    qr = hi_clampq(qreal,iz)
+    qlo = floor(qr); qhi = qlo + 1; fr = qr - dble(qlo)
+    call hirsh_i_get_grid(iz,qlo,glo)
+    call hirsh_i_get_grid(iz,qhi,ghi)
+    rlo = 0d0; rhi = 0d0
+    if (associated(glo)) call glo%interp(dist,rlo,d1,d2)
+    if (associated(ghi)) call ghi%interp(dist,rhi,d1,d2)
+    rho = (1d0 - fr) * rlo + fr * rhi
+  end function hirsh_i_refrho
 
-         ! (1a) precomputed spherical radial density (.rho)
-         fname = base // ".rho"
-         inquire(file=fname,exist=exist)
-         if (exist) then
-            call grid1_read_rho(hi_cache(iz,q),fname,iz,q)
-            if (hi_cache(iz,q)%isinit) return
-         end if
+  !> Free the shared (z,q) reference-density cache.
+  module subroutine hirsh_i_cache_clean()
+    if (allocated(hi_cache)) deallocate(hi_cache)
+    if (allocated(hi_cache_tried)) deallocate(hi_cache_tried)
+  end subroutine hirsh_i_cache_clean
 
-         ! (1b) user-supplied .wfc (orbital format)
-         fname = base // ".wfc"
-         inquire(file=fname,exist=exist)
-         if (exist) then
-            call hirsh_i_load_userfile(hi_cache(iz,q),fname,iz,q)
-            if (hi_cache(iz,q)%isinit) return
-         end if
-      end if
-
-      ! (2),(3) Built-in tables / anion extrapolation via read_db.
-      call hi_cache(iz,q)%read_db(iz,q)
-      if (hi_cache(iz,q)%isinit) return
-
-      call ferror('hirsh_i_preload', &
-         'Could not load atomic density for z=' // trim(string(iz)) // &
-         ' q=' // trim(string(q)) // '; using neutral',warning)
-    end subroutine load_one
-  end subroutine hirsh_i_preload
+  !> Clamp a real charge into the representable range [-hi_qoff, iz).
+  pure function hi_clampq(q,iz) result(qr)
+    real*8, intent(in) :: q
+    integer, intent(in) :: iz
+    real*8 :: qr
+    qr = q
+    if (qr < -dble(hi_qoff)) qr = -dble(hi_qoff) + 1d-3
+    if (qr > dble(iz) - 1d-3) qr = dble(iz) - 1d-3
+  end function hi_clampq
 
   !> Load a user-supplied .wfc file in critic2 format into a grid1
   !> using the public grid1_read_file wrapper.

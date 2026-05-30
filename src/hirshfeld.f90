@@ -29,6 +29,10 @@ module hirshfeld
   public :: hirsh_i_driver
   public :: hirsh_i_eval
   public :: hirsh_i_cleanup
+  ! mesh / charge-aware reference helpers (used by molecular HI-XDM)
+  public :: hirsh_i_prepare
+  public :: hirsh_i_refrho
+  public :: hirsh_i_cache_clean
 
   interface
      module subroutine hirsh_grid(s,bas)
@@ -70,6 +74,19 @@ module hirshfeld
        use types, only: basindat
        type(basindat), intent(inout) :: bas
      end subroutine hirsh_i_cleanup
+     module subroutine hirsh_i_prepare(s,qcel,wfcdir)
+       use systemmod, only: system
+       type(system), intent(in) :: s
+       real*8, intent(in) :: qcel(:)
+       character(len=*), intent(in) :: wfcdir
+     end subroutine hirsh_i_prepare
+     module function hirsh_i_refrho(iz,qreal,dist) result(rho)
+       integer, intent(in) :: iz
+       real*8, intent(in) :: qreal, dist
+       real*8 :: rho
+     end function hirsh_i_refrho
+     module subroutine hirsh_i_cache_clean()
+     end subroutine hirsh_i_cache_clean
   end interface
 
 end module hirshfeld
