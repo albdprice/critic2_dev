@@ -195,32 +195,62 @@ def alpha_sternheimer(r, P, labels, orbs, prefac=2.0/3.0):
     return alpha, contribs, V
 
 
+def r99_neutral(sym, wfcdir):
+    """99%-enclosure radius of the neutral atom from its dat/wfc density."""
+    sym = sym.lower()
+    f = os.path.join(wfcdir, f"{sym if len(sym)==2 else sym+'_'}_pbe.wfc")
+    if not os.path.exists(f):
+        f = os.path.join(wfcdir, f"{sym}__pbe.wfc")
+    ls = open(f).readlines()
+    norb = int(ls[0]); occ = [float(x) for x in ls[2].split()]; ng = int(ls[4])
+    d = np.array([[float(x) for x in ls[5+i].split()] for i in range(ng)])
+    r = d[:, 0]; psi = d[:, 1:1+norb]
+    rho = (np.array(occ)[None, :]*psi**2).sum(1)/(4*math.pi*r**2)
+    P = 4*math.pi*r**2*rho
+    cum = np.concatenate([[0], np.cumsum(0.5*(P[1:]+P[:-1])*np.diff(r))]); cum /= cum[-1]
+    return float(r[np.searchsorted(cum, 0.99)])
+
+
+def compute_alpha(sym, q, rmax, rel=0, outdir=None):
+    """Return (alpha_a0^3, ok, msg) for element sym at charge q, confined at
+    rmax. ok=False on ld1/parse failure."""
+    Z = ELEM.index(sym)
+    N = Z - q
+    if N < 1 or N > len(_CONF):
+        return None, False, f"unsupported N={N}"
+    conf = _CONF[N - 1]
+    if outdir is None:
+        outdir = f"/tmp/stern/{sym}_q{q}"
+    os.makedirs(outdir, exist_ok=True)
+    ok, out, wfc = run_ld1(sym, Z, conf, rmax, outdir, rel=rel)
+    if not ok:
+        return None, False, "ld1 failed"
+    try:
+        orbs = parse_eigen(out)
+        r, P, labels = parse_wfc(wfc)
+        alpha, contribs, V = alpha_sternheimer(r, P, labels, orbs)
+    except Exception as e:
+        return None, False, f"solve error: {e}"
+    return alpha, True, conf
+
+
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("symbol"); ap.add_argument("charge", type=int)
     ap.add_argument("--rmax", type=float, default=None)
+    ap.add_argument("--wfcdir", default=os.path.expanduser("~/critic2_dev/dat/wfc"))
+    ap.add_argument("--auto-rmax", action="store_true",
+                    help="rmax = 3.6 * R99(neutral) (the density-reference box)")
     ap.add_argument("--rel", type=int, default=0)
-    ap.add_argument("-v", "--verbose", action="store_true")
     args = ap.parse_args()
     sym = args.symbol; q = args.charge
-    Z = ELEM.index(sym)
-    N = Z - q
-    if N < 1 or N > len(_CONF):
-        sys.exit(f"unsupported electron count N={N}")
-    conf = _CONF[N - 1]
-    rmax = args.rmax if args.rmax else 20.0
-    outdir = f"/tmp/stern/{sym}_q{q}"
-    os.makedirs(outdir, exist_ok=True)
-    ok, out, wfc = run_ld1(sym, Z, conf, rmax, outdir, rel=args.rel)
+    rmax = args.rmax
+    if rmax is None:
+        rmax = 3.6 * r99_neutral(sym, args.wfcdir) if args.auto_rmax else 20.0
+    alpha, ok, msg = compute_alpha(sym, q, rmax, rel=args.rel)
     if not ok:
-        sys.exit(f"ld1.x failed for {sym} q{q}\n" + out[-800:])
-    orbs = parse_eigen(out)
-    r, P, labels = parse_wfc(wfc)
-    alpha, contribs, V = alpha_sternheimer(r, P, labels, orbs)
-    if args.verbose:
-        for (lab, lp, term) in contribs:
-            print(f"  {lab} -> l'={lp}: {term:+.4f}")
-    print(f"{sym} q{q:+d} N={N} conf='{conf}' rmax={rmax}  alpha(0) = {alpha:.4f} a0^3")
+        sys.exit(f"FAILED {sym} q{q}: {msg}")
+    print(f"{sym} q{q:+d} rmax={rmax:.3f}  alpha(0) = {alpha:.4f} a0^3")
 
 
 if __name__ == "__main__":

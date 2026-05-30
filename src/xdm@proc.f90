@@ -155,6 +155,8 @@ contains
                 ialpharef = 2   ! Stage 2B: element-specific volume-scaling exponent p'_Z
              elseif (equal(word,"compute").or.equal(word,"moment")) then
                 ialpharef = 3   ! Stage 2C: Kirkwood-type moment estimator from confined ld1.x ions
+             elseif (equal(word,"stern").or.equal(word,"sternheimer")) then
+                ialpharef = 4   ! Stage 2C-rigorous: confined-ion Sternheimer ratios
              else
                 call ferror("xdm_driver","unknown ALPHAREF mode: "//word,faterr,line,syntax=.true.)
              end if
@@ -347,6 +349,8 @@ contains
              ialpharef = 2
           elseif (equal(word,"compute").or.equal(word,"moment")) then
              ialpharef = 3
+          elseif (equal(word,"stern").or.equal(word,"sternheimer")) then
+             ialpharef = 4
           else
              call ferror("xdm_driver","unknown ALPHAREF mode: "//word,faterr,line,syntax=.true.)
              return
@@ -639,7 +643,7 @@ contains
        ! Stage 2 (periodic): load the charge-matched reference cache so
        ! chargeaware_atpol can integrate hirsh_i_refrho for the converged HI
        ! charges (routes 1/3; route 2 needs no cache).
-       if (ialpharef == 1 .or. ialpharef == 3) &
+       if (ialpharef == 1 .or. ialpharef == 3 .or. ialpharef == 4) &
           call hirsh_i_prepare(sy,bashi%hi_qfinal,bashi%hi_wfcdir)
     end if
 
@@ -749,7 +753,7 @@ contains
        end if
     end do
     deallocate(ityp)
-    if (ialpharef == 1 .or. ialpharef == 3) call hirsh_i_cache_clean()
+    if (ialpharef == 1 .or. ialpharef == 3 .or. ialpharef == 4) call hirsh_i_cache_clean()
 
     ! report charge-aware polarizabilities (periodic Stage 2)
     if (dohi .and. ialpharef > 0) then
@@ -757,6 +761,7 @@ contains
        case (1); write (uout,'("+ Stage 2A (ALPHAREF GOULD): charge-aware polarizabilities (a0^3)")')
        case (2); write (uout,'("+ Stage 2B (ALPHAREF SCALE): charge-aware polarizabilities (a0^3)")')
        case (3); write (uout,'("+ Stage 2C (ALPHAREF COMPUTE): charge-aware polarizabilities (a0^3)")')
+       case (4); write (uout,'("+ Stage 2C (ALPHAREF STERN): charge-aware polarizabilities (a0^3)")')
        end select
        write (uout,'("# i At      Q             V_AIM         a_neutscal    alpha_AIM")')
        do i = 1, sy%c%nneq
@@ -1634,7 +1639,7 @@ contains
        ! Gould-Bucko ion polarizability (ion_alpha0, linear-in-N interp) and
        ! V_free(Q) the charge-matched reference volume. This is the physical
        ! pairing the volume-only VOLREF lacks.
-       if (lvolref .or. lalpharef == 1 .or. lalpharef == 3) then
+       if (lvolref .or. lalpharef == 1 .or. lalpharef == 3 .or. lalpharef == 4) then
           call hirsh_i_prepare(sy,qcel,wfcdir)
           if (lvolref) then
              write (uout,'("+ Stage 1 (VOLREF): charge-matched reference volumes")')
@@ -1643,6 +1648,10 @@ contains
           if (lalpharef == 1) then
              write (uout,'("+ Stage 2A (ALPHAREF GOULD): FI-faithful polarizabilities (a0^3)")')
              write (uout,'("# i At      Q             a_neutscal    a_FI(Q)       alpha_AIM")')
+          end if
+          if (lalpharef == 4) then
+             write (uout,'("+ Stage 2C (ALPHAREF STERN): confined-ion Sternheimer polarizabilities (a0^3)")')
+             write (uout,'("# i At      Q             a_neutscal    a_stern(Q)    alpha_AIM")')
           end if
           if (lalpharef == 3) then
              write (uout,'("+ Stage 2C (ALPHAREF COMPUTE): Kirkwood moment estimator from confined ions (a0^3)")')
@@ -1682,6 +1691,14 @@ contains
                 else
                    write (uout,'(I3,X,A,X,1p,2(E13.6,X),A)') i, string(nameguess(iz,.true.)), &
                       qcel(i), apol0, "  (no GB datum; neutral-scaling used)"
+                end if
+             end if
+             if (lalpharef == 4) then
+                afi = ion_alpha_stern(iz,qcel(i))
+                if (afi > 0d0 .and. vfq > 1d-30) then
+                   atpolov(i) = afi * v(i) / vfq          ! alpha_stern(Q) * V_AIM / V_free(Q)
+                   write (uout,'(I3,X,A,X,1p,4(E13.6,X))') i, string(nameguess(iz,.true.)), &
+                      qcel(i), apol0, afi, atpolov(i)
                 end if
              end if
              if (lalpharef == 3) then
@@ -2234,6 +2251,27 @@ contains
     a = (1d0-f)*a0 + f*aend
   end function ion_alpha0
 
+  !> Charge-aware static polarizability (a0^3) from the confined-ion
+  !> Sternheimer ratios (Stage 2C-rigorous): alpha_free(Q) = alpha_free^CRC(Z)
+  !> * rstern, with rstern interpolated linearly in electron number between
+  !> the bracketing integer charge states (rstern(0)=1). The uncoupled
+  !> absolute overestimate cancels in the ratio. q clamped to [-1,+1].
+  function ion_alpha_stern(iz,q) result(a)
+    use param, only: alpha_free, rstern_p1, rstern_m1, maxzat0
+    integer, intent(in) :: iz
+    real*8, intent(in) :: q
+    real*8 :: a, qc, ratio, f
+    a = 0d0
+    if (iz < 1 .or. iz > maxzat0) return
+    qc = min(max(q,-1d0),1d0)
+    if (qc >= 0d0) then
+       f = qc;  ratio = (1d0-f) + f*rstern_p1(iz)
+    else
+       f = -qc; ratio = (1d0-f) + f*rstern_m1(iz)
+    end if
+    a = alpha_free(iz) * ratio
+  end function ion_alpha_stern
+
   !> Charge-aware atomic polarizability (a0^3) for the Stage-2 routes, shared
   !> by the molecular (xdm_wfn) and periodic (xdm_grid) paths so both use
   !> identical formulas. iz = atomic number, qreal = HI charge, vaim = HI
@@ -2284,6 +2322,9 @@ contains
 
     if (ialpha == 1) then
        afi = ion_alpha0(iz,qreal)                 ! Gould-Bucko FI table
+       if (afi > 0d0) atpol = afi * vaim / vfq
+    elseif (ialpha == 4) then
+       afi = ion_alpha_stern(iz,qreal)            ! our confined-ion Sternheimer ratios
        if (afi > 0d0) atpol = afi * vaim / vfq
     elseif (ialpha == 3) then
        if (r20 > 1d-30 .and. n0 > 1d-30 .and. nq > 1d-30) then
