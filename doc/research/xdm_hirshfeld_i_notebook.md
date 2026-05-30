@@ -643,6 +643,79 @@ Caveat for any external use: in-molecule atoms are *fractional* ions
 (Na⁺⁰·⁸⁹), so the rigorous comparison interpolates the ion α to the
 fractional charge; the cation overestimate stays ~10–20× even then, so the
 conclusion is robust. Inputs: `/tmp/xdmtest/{NaCl,LiF,h2o,CH4}_volref.cri`.
-**Next: Stage 2** — compute confined-ion polarizabilities `α_free(Q)`
-(same ld1.x family) and interpolate, completing the FI-faithful model.
+**Next: Stage 2** — confined-ion polarizabilities `α_free(Q)` and interpolate,
+completing the FI-faithful model (scoped in §l).
+
+### 2026-05-30l — Stage 2 scoping: how FI/MBD and others handle the reference α
+Literature dig (Tkatchenko/Gould/Bučko FI-MBD + neighbours) on **where the
+reference ion polarizability comes from**, and options for us.
+
+**How the established methods do it:**
+- **TS / TS+HI (Tkatchenko–Scheffler, VASP).** α_AIM = ν·α_free with
+  ν = (V_AIM/V_free). α_free is a **tabulated** free-atom value (Chu–Dalgarno
+  TDDFT), rows 1–6 minus lanthanides. *Plain* TS uses the **neutral** α_free
+  even under iterative-Hirshfeld partitioning — i.e. exactly the "neutral α +
+  volume ratio" that we have shown fails for ions. So TS+HI fixes the
+  *weights/volumes* but NOT the α reference. This is the gap our Stage 1+2 and
+  the FI work close.
+- **FI / MBD@rsSCS-FI (Gould, Lebègue, Ángyán, Bučko, JCTC 2016 / 2017,
+  arXiv:1703.08786) — the method to emulate.** Exact model:
+  `α_p^AIM(iω;N) = α_p^FI(iω;N) · V_p^eff(N)/V_p^FI(N)`, with the
+  fractional-charge reference built by **linear interpolation between integer
+  ions**: `α_{Z,N}(iω) = f·α_{Z,⌈N⌉} + (1−f)·α_{Z,⌊N⌋}`, f = N−⌊N⌋. The
+  integer-ion α are **precomputed, ab initio (TDDFT + ensemble DFT)** — *not*
+  recomputed per system. **No damping refit** (β = 0.83 unchanged); cubic ionic
+  crystals MARE 157%→23%; NaCl/MgO/LiF that *crash* under neutral-ref MBD
+  succeed. Effective volumes from iterative Hirshfeld. **They do NOT confine**
+  the unbound anions: self-consistent α for neutral/cations/closed-shell
+  monoanions, **frozen-orbital / non-self-consistent** α (built on the neutral)
+  for the rest.
+- **The ion-α database itself: Gould & Bučko, JCTC 12, 4644 (2016),
+  arXiv:1604.02751 — "C₆ Coefficients and Dipole Polarizabilities for All
+  Atoms and Many Ions in Rows 1–6."** ~411 species; TDDFT imaginary-frequency
+  **dynamic α(iω)**, **static α(0)**, and **C₆**; three tiers (raw TDDFT,
+  benchmark-corrected, frozen-orbital anions). Data on ACS figshare
+  (collection 3281582) + Griffith repository (Gould's institution; likely the
+  open copy — ACS figshare returned 403). *This is the table we would ingest.*
+- **Gould, JCP 145, 084308 (2016), arXiv:1608.04161 — "How polarizabilities
+  and C₆ actually vary with atomic volume."** Uses **confined atoms** (like us)
+  and finds `C₆/C₆ᴿ ≈ (V/Vᴿ)^p`, `α/αᴿ ≈ (V/Vᴿ)^{p'}`, with **element-specific**
+  exponents and the surprising relation `p' ≈ p − 0.615` (NOT the naive
+  `p'=1` that TS/XDM assume, nor `p'=p/2`). Two payoffs for us: (i) it
+  *quantitatively* explains why neutral volume-scaling (`p'=1`) of α is wrong;
+  (ii) the scaling law is *robust to the confinement form* (harmonic/cubic/
+  quartic), which independently **vindicates our box-confinement choice** and
+  hands us a cheap Stage-2 route (below).
+- **MCLF (Manz).** Avoids a per-ion α table entirely via charge-dependent
+  **scaling laws on ⟨r³⟩,⟨r⁴⟩** from neutral data. Sidesteps the reference but
+  is its own model, not XDM-compatible without surgery.
+
+**Stage-2 options for critic2 XDM (we already have `V_free(Q)` and the moments):**
+- **(A) Ingest the Gould–Bučko static ion-α database + linear-N interpolation
+  (the FI recipe). RECOMMENDED.** Field-standard, defensible, no recompute,
+  rows 1–6. Plug `α_free(Q)` into the Stage-1 slot:
+  `α = (V_AIM/V_free(Q))·α_free(Q)`. *Consistency caveat:* their α uses
+  frozen-orbital anions while our `V_free(Q)` uses confined ld1.x ions — but
+  FI itself mixes α-source and V-source, so this is in-family. Cost: parse a
+  table, add an interpolator; data-acquisition is the main task (get the SI/
+  figshare/Griffith file, map to our element+charge grid).
+- **(B) Element-specific volume-scaling exponents (Gould JCP 2016): cheap
+  cross-check / fallback.** `α_free(Q) = α_free⁰·(V_free(Q)/V_free⁰)^{p'_Z}`
+  using our computed `V_free(Q)` and tabulated `p'_Z`. Uses our own volumes;
+  no ion-α table. Captures the *nonlinear* α–V scaling TS/XDM miss, but is
+  still neutral-anchored (won't fully capture shell-removal); good as a
+  sanity bracket against (A).
+- **(C) Compute α for our confined ld1.x ions ourselves — most internally
+  consistent, most work.** Needs a polarizability out of a *spherical* atomic
+  code: Sternheimer/coupled-KS linear response (the proper route; ld1.x has
+  no field), or finite-field in a 3D confined-atom DFT (Psi4/Gaussian with a
+  confining potential). Defer unless (A) proves inconsistent with our densities.
+
+**Recommendation:** do **(A)** for the deliverable and keep **(B)** as a from-
+our-volumes cross-check. Both reuse the Stage-1 plumbing (`volscal`/`α_free(Q)`
+slot). Open sub-tasks: locate & parse the Gould–Bučko table (static α per
+element+charge), add a charge-state interpolator mirroring `hirsh_i_refrho`,
+wire `α_free(Q)` into `calc_coefs`, re-benchmark NaCl/LiF/H₂O/CH₄, check the
+a1/a2 refit need (RQ5; FI needed none). Decision needed from AP: pursue (A)
+[tabulate], (B) [scaling-law], or (C) [compute] first.
 
