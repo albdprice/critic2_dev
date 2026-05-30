@@ -1072,3 +1072,38 @@ separate `core` (xdm@proc l.434). So the QE route works without VASP.
   recipe + structures for the submission agent to run the full ionic-solid set
   (LiF/NaF/NaCl/KCl/MgO/CaO …) + scale on the HPC. Verify-then-package, so no
   wasted HPC runs.
+
+### 2026-05-30x — solids: QE pipeline runs, but TWO real solid-specific blockers found
+Source-built QE `pw.x`/`pp.x` (QE 7.2, `/tmp/qe-build`) work (apt build is
+FORTIFY-broken). NaCl rocksalt SCF converged; `pp.x` produced rho/rhoae/elf
+cubes; critic2 reads them and the charge-aware grid path RUNS. But the NaCl HI
+charges are garbage (Na −4.98, Cl +17). Diagnosed two distinct solid blockers:
+
+1. **All-electron density on the grid.** `pp.x plot_num=17` ("AE charge,
+   PAW") cube **integrates to 16.19 e, not 28** — i.e. the VALENCE count
+   (Na 9 + Cl 7 semicore pseudos); the 12 core electrons are absent (FFT grid
+   can't hold the core cusps). So we don't actually have the AE density.
+   FIX (critic2-standard for QE/plane-wave XDM): give the **valence** density +
+   the pseudo valence charge via **`ZPSP`**, and let critic2 reconstruct the
+   core analytically (AE = grid-valence + internal core → integrates to N; the
+   Hirshfeld weights then use fine analytic atomic densities, not the coarse
+   grid). Need the per-element ZPSP matching the QE pseudos (Na 9, Cl 7, …) and
+   the right keyword. **FHI-aims** (true all-electron, installed at
+   `/data/FHIaims_distribution/FHIaims_2025`) is the cleaner density source —
+   but a uniform cube still undersamples cusps, so core-reconstruction is the
+   robust route regardless of code.
+2. **Grid HI-SCF instability.** `hirsh_i_driver` (the periodic HI SCF) NEVER
+   got the stabilization applied to the mesh path in #34 (floor refrho≥0,
+   element-aware per-iteration Q-clamp, linear mixing). So even with a correct
+   density it diverges — the §f instability, solid edition. FIX: port the #34
+   stabilization into `hirsh_i_driver`.
+
+Both tractable and known. NOTE for collaboration: the installed
+`xdm.param.fhiaims` is **Kyle Bryenton's XCDM(Z) (2025, Johnson group)** —
+active XDM-in-FHI-aims development in Erin's own group; our charge-aware
+references are a natural thing to coordinate there. **Next (solids):**
+(a) port #34 stabilization to `hirsh_i_driver` (task #46); (b) nail the
+ZPSP/core-reconstruction recipe so the density integrates to N; (c) re-run
+NaCl → expect Na≈+0.8/Cl≈−0.8; (d) then package the verified recipe for the
+HPC submission agent. Molecular GMTKN55-ionic campaign is independent and
+unaffected.
