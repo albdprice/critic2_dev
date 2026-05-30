@@ -990,3 +990,30 @@ energies), which needs the QE crystal densities (#40); ionic *molecules*
 NaCl/LiF show large route spreads (523→334–389; 108→39–63 a₀³) but lack an
 easy reference. **Next:** generate QE solid densities → run neutral/A/B/C/
 stern on NaCl/MgO/LiF → compare cohesive energies (the headline result).
+
+### 2026-05-30u — 2A consistency flaw FIXED + accepted benchmark sets identified
+**2A fix (commit 12df48a5):** changed 2A's denominator from the confined
+`V_free(Q)` to the NEUTRAL `V_free(0)`: `α_AIM = α_FI(Q)·V_AIM/V_free(0)`.
+Rationale: Gould's α is referenced to *frozen-orbital* ions (orbitals ≈
+neutral ⇒ ~neutral-sized), so the consistent volume is neutral; the diffuse
+box-confined V over-reduced anions. (This is also literally the "TS+HI with
+charge-aware α" model.) The fully self-consistent routes (2C-stern, 2C-kirk:
+our own confined α AND V) correctly keep `V_free(Q)`. Covalent C6 recovers:
+H₂O 2A 16.1→36.8 (0.81×), CH₄ 58.7→121.0 (0.93×). Refined covalent ranking
+vs DOSD: neutral/HI/2A/2B ≈ 0.81–0.99× (good); 2C-kirk 0.80–0.81; **2C-stern
+0.57–0.66 (over-reduces** — full-FI with diffuse confined anion volume; a
+genuine feature, not a bug). So the charge-matched-VOLUME routes reduce
+covalent C6; volume-scaling (2B) and neutral-volume routes preserve it.
+
+**Accepted benchmark sets to run (the validation campaign):**
+- Molecular non-covalent: **S66 / S66×8** (Řezáč–Hobza, CCSD(T)/CBS) — the
+  standard "doesn't hurt covalent" test; S22/L7/X40 companions.
+- Molecular crystals: **X23** (Otero-de-la-Roza & Johnson's own cohesive-
+  energy set — the canonical periodic-XDM benchmark).
+- Solids / ionic payoff: the **XDM-for-solids cohesive-energy set** (OdlR &
+  Johnson, JCP 2012) + the **FI ionic-crystal set** (alkali halides LiF/NaCl,
+  oxide MgO, layered MoS₂ vs RPA) — *exactly* where FI showed 157%→23%, so
+  our headline target. Plus LC20 lattice constants.
+- Tiered plan: Tier 1 = S66×8 + X23 (no harm); Tier 2 = alkali-halide+oxide
+  cohesive energies (the payoff). Both are campaigns (S66 wavefunctions; X23/
+  solid periodic densities) but let us compare directly to published XDM/FI.
