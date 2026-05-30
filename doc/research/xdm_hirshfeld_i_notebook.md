@@ -63,22 +63,26 @@ LiH regression test `tests/009_intgrid/022_hirshfeld_i`. Generators in
   Produced the from-code reference-treatment table (neutral scaling
   overestimates cation α 20–35×).
 
-- **Stage 2A (ALPHAREF GOULD) DONE (§m, commit c483a6f5):** FI-faithful
-  `α_AIM=α_FI(Q)·V_AIM/V_free(Q)`; Gould–Bučko ion-α embedded (`alpha_gb_*` in
-  param.F90; provenance `dat/xdm_ion_alpha_gould_bucko_2016.dat`); `ion_alpha0`
-  linear-in-N interp. From-code: Na 22.7→14.4, Cl 21.3→23.3, Li 6.8→5.5,
-  F 6.5→9.0 (cations↓, anions↑). Covers |Q|<1 (charges −1/0/+1).
+- **Stage 2 (A/B/C) ALL DONE (§m/§n/§o):** three keyword-gated charge-aware
+  α routes, all from-code. **2A** `alpharef gould` (commit c483a6f5): FI-faithful
+  with embedded Gould–Bučko ion-α (`alpha_gb_*`; provenance
+  `dat/xdm_ion_alpha_gould_bucko_2016.dat`); `α_AIM=α_FI(Q)·V_AIM/V_free(Q)`.
+  **2B** `alpharef scale` (1457dbdd): `α_AIM=α⁰·(V_AIM/V_free⁰)^{p'_Z}`,
+  exponents `pprime_gb` (Gould JCP 2016, p'_Z=p_Z−0.615). **2C** `alpharef
+  compute` (ea4b2e9a): Kirkwood moment estimator `α_free(Q)∝⟨r²⟩²/N` from our
+  confined densities, calibrated to neutral. Per-atom α (Na/Li/Cl/F) all move
+  cations↓/anions↑; the three span the ion-α reference uncertainty.
 
-**IMMEDIATE NEXT ACTIONS — AP wants all of A/B/C; A done, B & C next**
-1. **Stage 2B** (task #38): per-element volume-scaling exponents `p'_Z` from
-   Gould JCP 2016 (arXiv:1608.04161; source already on dev-srv
-   `/tmp/gould/ex_1608.04161/paper.tex`) → `α(Q)=α⁰·(V_free(Q)/V_free⁰)^{p'_Z}`,
-   reusing our `V_free(Q)`. Keyword `alpharef scale`.
-2. **Stage 2C** (task #39): compute α from our confined ld1.x ions
-   (Sternheimer/coupled-KS, or finite-field 3D confined-atom DFT). `alpharef compute`.
-3. **Validate A/B/C** vs reference C₆/binding; check a1/a2 refit (RQ5). Add
-   multiply-charged ions + dynamic α(iω)/V_FI (ACS SI / Gould JCP DB) for full
-   periodic-table deployment.
+**Keyword map:** `hirshfeld_i` (Stage 0/M) → `+volref` (Stage 1 volume) →
+`+alpharef gould|scale|compute` (Stage 2 A|B|C). All gated; default unchanged.
+
+**IMMEDIATE NEXT ACTIONS**
+1. **Validate A/B/C vs reference data** (the "which is best" question): needs a
+   benchmark set — molecular C₆ (e.g. vs the Gould–Bučko C₆ or Tang) and/or
+   ionic-solid lattice/binding energies. This is now the main scientific task.
+2. **a1/a2 refit check** (RQ5; FI needed none) once a validation set is chosen.
+3. Extend 2A to multiply-charged ions + dynamic α(iω) (ACS SI / Gould JCP DB)
+   for full periodic-table deployment.
 4. Molecular HI-XDM regression test (task #36; `tests/zz_source` download-gated).
 
 **Molecular HI-XDM run recipe (the working pipeline, via fchk — NOT wfx):**
@@ -806,3 +810,41 @@ independent charge-aware α routes now run from our pipeline. Inputs:
   the most internally-consistent route; compare to 2A/2B. Then validate all
   three vs reference C₆/binding and check the a1/a2 refit (RQ5).
 
+### 2026-05-30o — Stage 2C DONE: Kirkwood moment estimator from our confined ions (commit ea4b2e9a)
+A full Sternheimer/CPKS solve needs the ld1.x orbitals (we only export the
+`.rho` density), so instead used a **Kirkwood-type density-moment estimator**
+(precedent: MCLF scales α on density moments). Compute the free-ion α from
+the confined reference density's second moment, calibrated to the known
+neutral α so the prefactor cancels:
+
+  `α_free(Q) = α_free⁰ · [⟨r²⟩(Q)²/N(Q)] / [⟨r²⟩(0)²/N(0)]`,
+
+with `⟨r²⟩(Q)=∫ρ_ref^Q r² d³r`, `N(Q)=∫ρ_ref^Q` (radial integrals of the
+charge-matched density, same quadrature as `V_free(Q)`); then FI-faithful
+`α_AIM = α_free(Q)·V_AIM/V_free(Q)`. Keyword `alpharef compute`. **Fully
+from our density family** — no external table (2A), no fitted exponent (2B).
+
+**Consolidated three-route comparison — per-atom α (a₀³), all from critic2:**
+
+| atom (Q) | neutral-scaling | 2A (Gould table) | 2B (p'_Z scaling) | 2C (Kirkwood) | full-ion ref |
+|---|---|---|---|---|---|
+| Na (+0.89) | 22.7 | 14.4 | 9.3 | 14.7 | 0.93 (Na⁺) |
+| Li (+0.93) | 6.80 | 5.5 | 4.3 | **1.5** | 0.19 (Li⁺) |
+| Cl (−0.89) | 21.3 | 23.3 | 27.8 | 22.5 | 30.3 (Cl⁻) |
+| F (−0.93)  | 6.52 | 9.0 | 9.7 | 6.5 | 15.0 (F⁻) |
+
+All three charge-aware routes **agree in direction** (cations↓, anions↑);
+their spread is the genuine methodological uncertainty in the ion-α
+reference (largest for the alkali cations, where α changes by ~3 orders of
+magnitude across one charge unit). E_disp (Ha), neutral / 2A / 2B / 2C:
+NaCl −1.151e-3 / −8.99e-4 / −8.40e-4 / −8.84e-4; LiF −1.955e-4 / −1.486e-4 /
+−1.476e-4 / −7.91e-5; H₂O −2.255e-4 / −7.72e-5 / −1.461e-4 / −1.386e-4.
+Inputs: `/tmp/xdmtest/{NaCl,LiF,h2o}_2c.cri`.
+
+**Stage 2 (A/B/C) all implemented, keyword-gated, from-code.** Keyword map:
+`hirshfeld_i` (Stage 0/M) | `+volref` (Stage 1) | `+alpharef gould|scale|compute`
+(Stage 2 A|B|C). Remaining: (1) **validate** A/B/C against reference
+C₆/binding-energy data (the "which is best" question — needs a benchmark set,
+e.g. ionic-solid lattice energies or molecular C₆); (2) **a1/a2 refit** check
+(RQ5; FI needed none); (3) extend 2A to multiply-charged ions + dynamic α(iω)
+for full periodic-table deployment; (4) molecular HI-XDM regression test (#36).
