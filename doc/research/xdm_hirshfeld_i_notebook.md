@@ -954,3 +954,39 @@ map:** `hirshfeld_i [volonly] [volref] [alpharef gould|scale|compute|stern]
   all routes vs reference C₆/binding on molecules (#41) AND ionic solids
   (needs QE crystal densities, #40); a1/a2 refit (#43); extend tables to
   rows 4–6 + multiply-charged/dynamic (#44); regression test (#36).
+
+### 2026-05-30t — periodic-table coverage closed; molecular validation STARTED
+**Coverage (answering "why not the whole PT"):** the HI density references
+are Z=1–117 (the partition is full-PT); 2A (Gould) ~rows 1–6, 2B rows 1–5
+(literature limits). 2C-Sternheimer was capped at Z≤18 *only* because the
+generator's `_CONF` had 18 configs — fixed by copying the full aufbau list;
+re-ran `batch_sternheimer.py` over Z=1–86 (256 species, commit 72afb7ec).
+Open-shell TM/f anion solves return negative/non-finite α (uncoupled
+Sternheimer breaks down near open-shell degeneracies) → neutral-fallback
+(11 cases); diffuse alkali/noble anion ratios capped at 8 (unused). So
+2C-stern is reliable for closed-shell/main-group; for open-shell TM/f use
+2A/2B. The routes are complementary across the table.
+
+**Molecular validation (harness `tools/wfc_generator/validate_mol_xdm.py`):**
+runs neutral + 4 charge-aware routes, sums the pairwise C6 to the
+homomolecular C6, compares to DOSD reference. Result (mol C6, a₀³; C6/ref):
+
+| molecule | neutral | HI | 2A | 2B | 2C-kirk | 2C-stern | DOSD |
+|---|---|---|---|---|---|---|---|
+| H₂O | 40.3 (.89) | 38.8 | **16.1 (.36)** | 40.9 (.90) | 36.2 | 29.7 (.66) | 45.3 |
+| CH₄ | 123 (.95) | 128 (.99) | **58.7 (.45)** | 120 (.93) | 105 | 73.5 (.57) | 129.7 |
+
+**Findings (covalent):** neutral / HI / 2B-scale match DOSD well (~0.9–1.0×);
+**2A over-reduces badly (0.36–0.45×)**, 2C-stern moderately. Diagnosis: **2A
+mixes sources** — Gould's *frozen-orbital* ion α with *our box-confined*
+`V_free(Q)` (large for anions); `α_FI(Q)·V_AIM/V_free(Q)` then over-reduces
+(the volume ratio kills it). The fix is to use V_FI consistent with the α
+reference (Gould's own ion volumes, in their SI — task #44) OR restrict 2A
+to where the mismatch is small. 2C-stern is self-consistent (α and V both
+from our confined ld1.x), hence better-behaved. This matches the FI
+literature: charge-aware references help *ionic* systems, are neutral-or-
+worse for covalent. → **The decisive test is ionic solids** (cohesive
+energies), which needs the QE crystal densities (#40); ionic *molecules*
+NaCl/LiF show large route spreads (523→334–389; 108→39–63 a₀³) but lack an
+easy reference. **Next:** generate QE solid densities → run neutral/A/B/C/
+stern on NaCl/MgO/LiF → compare cohesive energies (the headline result).
