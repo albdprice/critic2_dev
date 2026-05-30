@@ -81,7 +81,7 @@ contains
     character(len=:), allocatable :: word, chfw, hi_wfcdir
     integer :: lp
     real*8 :: a1, a2, chf
-    logical :: ok, dohi, himoments
+    logical :: ok, dohi, himoments, dovolref
 
     ! header
     write (uout,'("* Exchange-hole dipole moment (XDM) dispersion calculation ")')
@@ -137,13 +137,15 @@ contains
        endif
 
        ! optional charge-aware (Hirshfeld-I) partitioning (research option)
-       dohi = .false.; himoments = .true.; hi_wfcdir = ""
+       dohi = .false.; himoments = .true.; hi_wfcdir = ""; dovolref = .false.
        do while (.true.)
           word = lgetword(line,lp)
           if (equal(word,"hirshfeld_i").or.equal(word,"hi")) then
              dohi = .true.
           elseif (equal(word,"volonly").and.dohi) then
              himoments = .false.
+          elseif (equal(word,"volref").and.dohi) then
+             dovolref = .true.
           elseif (equal(word,"wfcdir").and.dohi) then
              hi_wfcdir = getword(line,lp)
              if (len_trim(hi_wfcdir) == 0) &
@@ -155,7 +157,7 @@ contains
           end if
        end do
 
-       call xdm_wfn(a1,a2,chf,dohi,himoments,hi_wfcdir)
+       call xdm_wfn(a1,a2,chf,dohi,himoments,hi_wfcdir,dovolref)
     end if
 
   end subroutine xdm_driver
@@ -1265,7 +1267,7 @@ contains
 
 
   !> Calculate XDM in molecules and crystals using the wavefunction.
-  subroutine xdm_wfn(a1o,a2o,chf,dohi,himoments,hi_wfcdir)
+  subroutine xdm_wfn(a1o,a2o,chf,dohi,himoments,hi_wfcdir,dovolref)
     use systemmod, only: sy
     use meshmod, only: mesh
     use fieldmod, only: type_wfn, type_dftb
@@ -1273,21 +1275,24 @@ contains
     use hirshfeld, only: hirsh_i_prepare, hirsh_i_refrho, hirsh_i_qfloor, hirsh_i_cache_clean
     use global, only: mesh_type, mesh_level
     use tools_io, only: faterr, ferror, uout, string, fopen_scratch, warning, fclose, nameguess
-    use param, only: bohrtoa, im_rho, im_null, im_b, icrd_cart
+    use param, only: bohrtoa, im_rho, im_null, im_b, icrd_cart, pi, alpha_free
 
     real*8, intent(in) :: a1o, a2o
     real*8, intent(in) :: chf
     logical, intent(in), optional :: dohi, himoments
     character(len=*), intent(in), optional :: hi_wfcdir
+    logical, intent(in), optional :: dovolref
 
     type(xdmparams) :: p
     type(mesh) :: m
     integer :: nelec
-    integer :: prop(7), i, j, lu, luh, iz, iter
+    integer :: prop(7), i, j, lu, luh, iz, iter, k
     real*8 :: rho, rhop, rhopp, x(3), r, a1, a2, nn, rb
     real*8 :: dum1(3), dum2(3,3), dqmax, ni, wmom, wvol, refh
+    real*8 :: vf0, vfq, rmidv, hv, qv, rr, rwv, apol0, apolq
     real*8, allocatable :: mm(:,:), v(:), qcel(:), qnew(:), phihi(:), prneu(:), qflo(:)
-    logical :: lhi, lhimom
+    real*8, allocatable :: volscal(:)
+    logical :: lhi, lhimom, lvolref
     character(len=:), allocatable :: wfcdir
     integer, parameter :: hi_maxit = 120
     real*8, parameter :: hi_tol = 1d-4
@@ -1305,6 +1310,7 @@ contains
 
     ! allocate space for the calculations
     allocate(mm(3,sy%c%ncel),v(sy%c%ncel))
+    allocate(volscal(sy%c%ncel)); volscal = 1d0   ! Stage-1 polarizability denominator scale
     allocate(p%c6(sy%c%ncel,sy%c%ncel),p%c8(sy%c%ncel,sy%c%ncel),p%c10(sy%c%ncel,sy%c%ncel))
     allocate(p%rvdw(sy%c%ncel,sy%c%ncel))
 
@@ -1367,6 +1373,7 @@ contains
     ! charge-aware (Hirshfeld-I) options
     lhi = .false.; if (present(dohi)) lhi = dohi
     lhimom = .true.; if (present(himoments)) lhimom = himoments
+    lvolref = .false.; if (present(dovolref)) lvolref = dovolref
     wfcdir = ""; if (present(hi_wfcdir)) wfcdir = trim(hi_wfcdir)
 
     nelec = 0
@@ -1542,11 +1549,50 @@ contains
           iz = sy%c%spc(sy%c%atcel(i)%is)%z
           write (uout,'(I3,X,A,X,1p,E18.10)') i, string(nameguess(iz,.true.)), qcel(i)
        enddo
+
+       ! Stage 1 (VOLREF): charge-matched free-ion reference volumes V_free(Q),
+       ! integrated from the SAME reference densities that define the HI
+       ! weights, so the neutral->ion ratio is method-consistent. volscal =
+       ! V_free(Q)/V_free(0) rescales the polarizability denominator in
+       ! calc_coefs: alpha = V_AIM*alpha_free^0 / (frevol * volscal).
+       !
+       ! IMPORTANT: this is only the *volume* half of the FI reference. A
+       ! physical ion polarizability also needs the charge-matched
+       ! alpha_free(Q) (Stage 2): the small V_free(Q) of a cation in the
+       ! denominator and the large V_free(Q) of an anion are only correct
+       ! when paired with the correspondingly small/large alpha_free(Q).
+       ! VOLREF on its own therefore moves both ions the "wrong" way and is
+       ! intended as the architecture/diagnostic for the full FI model.
+       if (lvolref) then
+          call hirsh_i_prepare(sy,qcel,wfcdir)
+          write (uout,'("+ Stage 1 (VOLREF): charge-matched reference volumes")')
+          write (uout,'("# i At      V_AIM         V_free(0)     V_free(Q)     VfQ/Vf0      a_neutscal    a_volref")')
+          do i = 1, sy%c%ncel
+             iz = sy%c%spc(sy%c%atcel(i)%is)%z
+             if (iz < 1) cycle
+             vf0 = 0d0; vfq = 0d0
+             rmidv = 1d0 / real(iz,8)**(1d0/3d0)
+             hv = 1d0 / real(252,8)
+             do k = 1, 251
+                qv = hv * k
+                rr = rmidv * qv / (1d0-qv)
+                rwv = 4d0*pi*hv * rr**2 * rmidv/(1d0-qv)**2
+                vf0 = vf0 + hirsh_i_refrho(iz,0d0,rr)     * rwv * rr**3
+                vfq = vfq + hirsh_i_refrho(iz,qcel(i),rr) * rwv * rr**3
+             enddo
+             if (vf0 > 1d-30) volscal(i) = vfq/vf0
+             ! neutral-scaling vs volume-charge-matched polarizability (au)
+             apol0 = v(i) * alpha_free(iz) / frevol(iz,chf)
+             apolq = apol0 / volscal(i)
+             write (uout,'(I3,X,A,X,1p,6(E13.6,X))') i, string(nameguess(iz,.true.)), &
+                v(i), vf0, vfq, volscal(i), apol0, apolq
+          enddo
+       end if
        call hirsh_i_cache_clean()
     end if
 
     ! calculate and print out coefficients
-    call calc_coefs(a1,a2,chf,v,mm,p%c6,p%c8,p%c10,p%rvdw)
+    call calc_coefs(a1,a2,chf,v,mm,p%c6,p%c8,p%c10,p%rvdw,volscal)
 
     ! calculate and output energy and derivatives
     call calc_edisp(p)
@@ -2024,7 +2070,7 @@ contains
   !> volumes and moments (v, mm) and the damping function parameters
   !> (a1, a2, chf). Print out the calculated values. Works for
   !> molecules and crystals.
-  subroutine calc_coefs(a1,a2,chf,v,mm,c6,c8,c10,rvdw)
+  subroutine calc_coefs(a1,a2,chf,v,mm,c6,c8,c10,rvdw,volscal)
     use systemmod, only: sy
     use tools_io, only: uout, string
     use param, only: alpha_free
@@ -2033,10 +2079,11 @@ contains
     real*8, intent(in) :: v(sy%c%ncel), mm(3,sy%c%ncel)
     real*8, intent(out) :: c6(sy%c%ncel,sy%c%ncel), c8(sy%c%ncel,sy%c%ncel)
     real*8, intent(out) :: c10(sy%c%ncel,sy%c%ncel), rvdw(sy%c%ncel,sy%c%ncel)
+    real*8, intent(in), optional :: volscal(sy%c%ncel)  ! Stage-1 charge-matched volume denominator scale
 
     integer :: i, j
     integer :: iz
-    real*8 :: atpol(sy%c%ncel), fac, rc
+    real*8 :: atpol(sy%c%ncel), fac, rc, vs
 
     ! write moments and volumes
     write (uout,'("moments and volumes ")')
@@ -2051,7 +2098,9 @@ contains
     do i = 1, sy%c%ncel
        iz = sy%c%spc(sy%c%atcel(i)%is)%z
        if (iz < 1) cycle
-       atpol(i) = v(i) * alpha_free(iz) / frevol(iz,chf)
+       vs = 1d0
+       if (present(volscal)) vs = volscal(i)
+       atpol(i) = v(i) * alpha_free(iz) / (frevol(iz,chf) * vs)
     enddo
 
     ! coefficients and distances
