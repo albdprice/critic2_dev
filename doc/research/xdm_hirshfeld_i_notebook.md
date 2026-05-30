@@ -867,13 +867,16 @@ densities (QE)** — task #40.
 
 ### 2026-05-30q — Stage 2C-rigorous (Sternheimer) feasibility confirmed; plan
 AP: build the full confined-ion polarizability solve **now** (upgrade 2C
-beyond the Kirkwood estimator). Feasibility CONFIRMED — our patched QE
-`ld1.x` can output everything needed on the log grid:
-- **`file_chi`** → the all-electron radial orbitals R_{nl}(r) (already used:
-  `ld1.wfc`).
-- **`file_potscf`** → the converged self-consistent KS potential v_KS(r).
-So we have orbitals + potential + grid for the confined ion (same box that
-regularizes the density). Plan (radial coupled-perturbed KS / Sternheimer):
+beyond the Kirkwood estimator). Feasibility CONFIRMED:
+- **Orbitals R_{nl}(r):** ld1.x writes them to `ld1.wfc` by default (AE,
+  iswitch=1) — already produced/parsed by the Route-2 generator.
+- **KS potential v_KS(r):** reconstruct from the density we already have,
+  `v_KS = −Z/r + v_H[ρ] + v_xc^PBE[ρ]` (radial Poisson for v_H), consistent
+  with the ld1 SCF eigenvalues. (NB: the `file_chi`/`file_potscf` &input
+  vars I first tried are not valid ld1 namelist keys → read error; not
+  needed — reconstruct instead, or use the eigenvalues + orbitals directly.)
+So we have orbitals + (reconstructable) potential + grid for the confined
+ion (same box that regularizes the density). Plan (radial coupled-perturbed KS / Sternheimer):
 for each occupied (n,l), the dipole field z=r cosθ couples to l±1; solve the
 inhomogeneous radial ODE `(ĥ_{l'} − ε_{nl})(r·δu) = −(r·R_{nl})·⟨l'|cosθ|l⟩`
 with `ĥ_{l'} = −½ d²/dr² + l'(l'+1)/2r² + v_KS(r)` and the **box boundary
