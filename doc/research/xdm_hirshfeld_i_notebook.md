@@ -1107,3 +1107,31 @@ ZPSP/core-reconstruction recipe so the density integrates to N; (c) re-run
 NaCl → expect Na≈+0.8/Cl≈−0.8; (d) then package the verified recipe for the
 HPC submission agent. Molecular GMTKN55-ionic campaign is independent and
 unaffected.
+
+### 2026-05-30y — solids: #46 SCF stabilization DONE; #40 AE-routing partial (2 bugs)
+Built source QE 7.2 pw.x/pp.x, ran NaCl rocksalt, drove the QE→critic2
+charge-aware grid XDM end-to-end (commit 3af1f21f).
+- **#46 DONE:** ported the mesh stabilization to the grid driver
+  (`hirsh_i_driver`): refrho≥0 floor in `hirsh_i_eval`, element-aware anion
+  clamp (`hirsh_i_qfloor`), linear mixing β=0.5. The grid SCF no longer
+  explodes (was Na→−5). Grid HI regression (`022_hirshfeld_i.cro`) re-baselined
+  — same converged charges (Sum unchanged to ~1e-4), more iterations from
+  mixing.
+- **#40 PARTIAL:** route the all-electron density to the HI driver = rhoae if
+  given, else `rho(valence)+core` (core from ZPSP), via a temporary reference
+  swap. Mechanism active (NaCl: "Use core densities? T", core reconstructed),
+  BUT NaCl charges still wrong. Debug (iter-1) revealed **two concrete bugs**:
+  1. **AE field over-integrates:** `nelec` sums to **34.35, not 28**
+     (Na 11.76 + Cl 22.59). Valence integrates cleanly to 16.0, so the
+     `rho+core` core-reconstruction over-counts by ~6 e. Suspect the
+     `promolecular_atom(...,zpsp)` core vs ZPSP convention (critic2 printed
+     "Core charges (ZPSP): Na(9), Cl(7)" — if ZPSP is read as core rather than
+     valence, core≈16 → iae≈32–34). NEXT: check critic2's core/ZPSP semantics;
+     the XDM *moment* loop already reconstructs `(rhot+core)` and works, so
+     compare how it integrates vs the HI driver.
+  2. **`hirsh_i_qfloor` returns 0, not −1**, inside the grid driver even though
+     `na_q-1.rho`/`cl_q-1.rho` exist → the anion clamp pins charges at 0.
+     wfcdir/symstr probe-path issue in the driver context. NEXT: print the
+     probed path; likely a trim/case/dirsep mismatch.
+Both are isolated; once fixed, expect NaCl Na≈+0.8/Cl≈−0.8. Molecular path
+(5 routes) + default XDM unaffected; regression green.
