@@ -151,6 +151,8 @@ contains
              word = lgetword(line,lp)
              if (equal(word,"gould").or.equal(word,"fi")) then
                 ialpharef = 1   ! Stage 2A: Gould-Bucko tabulated ion alpha, FI-faithful
+             elseif (equal(word,"scale")) then
+                ialpharef = 2   ! Stage 2B: element-specific volume-scaling exponent p'_Z
              else
                 call ferror("xdm_driver","unknown ALPHAREF mode: "//word,faterr,line,syntax=.true.)
              end if
@@ -1283,7 +1285,7 @@ contains
     use hirshfeld, only: hirsh_i_prepare, hirsh_i_refrho, hirsh_i_qfloor, hirsh_i_cache_clean
     use global, only: mesh_type, mesh_level
     use tools_io, only: faterr, ferror, uout, string, fopen_scratch, warning, fclose, nameguess
-    use param, only: bohrtoa, im_rho, im_null, im_b, icrd_cart, pi, alpha_free
+    use param, only: bohrtoa, im_rho, im_null, im_b, icrd_cart, pi, alpha_free, pprime_gb
 
     real*8, intent(in) :: a1o, a2o
     real*8, intent(in) :: chf
@@ -1580,7 +1582,7 @@ contains
        ! Gould-Bucko ion polarizability (ion_alpha0, linear-in-N interp) and
        ! V_free(Q) the charge-matched reference volume. This is the physical
        ! pairing the volume-only VOLREF lacks.
-       if (lvolref .or. lalpharef > 0) then
+       if (lvolref .or. lalpharef == 1) then
           call hirsh_i_prepare(sy,qcel,wfcdir)
           if (lvolref) then
              write (uout,'("+ Stage 1 (VOLREF): charge-matched reference volumes")')
@@ -1621,6 +1623,23 @@ contains
                       qcel(i), apol0, "  (no GB datum; neutral-scaling used)"
                 end if
              end if
+          enddo
+       end if
+
+       ! Stage 2B (ALPHAREF SCALE): element-specific volume-scaling exponent.
+       ! alpha_AIM = alpha_free^0 * (V_AIM/V_free^0)^{p'_Z}, replacing the
+       ! standard p'_Z=1. Charge-awareness enters through V_AIM (the HI
+       ! in-molecule volume). Needs no ion reference densities.
+       if (lalpharef == 2) then
+          write (uout,'("+ Stage 2B (ALPHAREF SCALE): volume-scaling exponent p''_Z (a0^3)")')
+          write (uout,'("# i At      V_AIM/Vfree   p''_Z          a_neutscal    alpha_AIM")')
+          do i = 1, sy%c%ncel
+             iz = sy%c%spc(sy%c%atcel(i)%is)%z
+             if (iz < 1) cycle
+             apol0 = v(i) * alpha_free(iz) / frevol(iz,chf)
+             atpolov(i) = alpha_free(iz) * (v(i)/frevol(iz,chf))**pprime_gb(iz)
+             write (uout,'(I3,X,A,X,1p,4(E13.6,X))') i, string(nameguess(iz,.true.)), &
+                v(i)/frevol(iz,chf), pprime_gb(iz), apol0, atpolov(i)
           enddo
        end if
        call hirsh_i_cache_clean()

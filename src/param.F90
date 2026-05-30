@@ -330,6 +330,36 @@ module param
       0d0, 0d0, 0d0, 0d0, 0d0, 0d0,&
       0d0, 0d0, 0d0 /)
 
+  ! Element-specific polarizability volume-scaling exponent p'_Z, such that
+  ! alpha/alpha^R ~ (V/V^R)^{p'_Z}. From Gould, J. Chem. Phys. 145, 084308
+  ! (2016) [arXiv:1608.04161]: p'_Z = p_Z - 0.615 (PGG kernel C6 exponents
+  ! p_Z, rows 1-5). Replaces the standard "rule of thumb" p'_Z = 1 assumed by
+  ! Tkatchenko-Scheffler and XDM. Used by the volume-scaling charge-aware XDM
+  ! (Stage 2B): alpha_AIM = alpha_free^0 * (V_AIM/V_free^0)^{p'_Z}. Elements
+  ! beyond Z=54 default to 1.0 (the standard linear scaling).
+  real*8, parameter :: pprime_gb(1:maxzat0) = (/&
+      1.235d0, 1.175d0, 1.145d0, 1.215d0, 1.295d0, 1.385d0,&
+      1.505d0, 1.625d0, 1.715d0, 1.785d0, 1.455d0, 1.325d0,&
+      1.475d0, 1.545d0, 1.575d0, 1.645d0, 1.715d0, 1.775d0,&
+      1.755d0, 1.495d0, 1.515d0, 1.555d0, 1.585d0, 1.825d0,&
+      1.625d0, 1.645d0, 1.655d0, 1.675d0, 1.925d0, 1.695d0,&
+      1.795d0, 1.845d0, 1.865d0, 1.855d0, 1.885d0, 1.925d0,&
+      2.015d0, 1.625d0, 1.635d0, 1.915d0, 1.955d0, 2.075d0,&
+      1.825d0, 2.155d0, 2.195d0, 2.175d0, 2.285d0, 1.975d0,&
+      2.045d0, 2.085d0, 2.135d0, 2.095d0, 2.085d0, 2.075d0,&
+      1d0, 1d0, 1d0, 1d0, 1d0, 1d0,&
+      1d0, 1d0, 1d0, 1d0, 1d0, 1d0,&
+      1d0, 1d0, 1d0, 1d0, 1d0, 1d0,&
+      1d0, 1d0, 1d0, 1d0, 1d0, 1d0,&
+      1d0, 1d0, 1d0, 1d0, 1d0, 1d0,&
+      1d0, 1d0, 1d0, 1d0, 1d0, 1d0,&
+      1d0, 1d0, 1d0, 1d0, 1d0, 1d0,&
+      1d0, 1d0, 1d0, 1d0, 1d0, 1d0,&
+      1d0, 1d0, 1d0, 1d0, 1d0, 1d0,&
+      1d0, 1d0, 1d0, 1d0, 1d0, 1d0,&
+      1d0, 1d0, 1d0, 1d0, 1d0, 1d0,&
+      1d0, 1d0, 1d0 /)
+
   ! factorials
   integer, parameter :: mfact = 30  !< factorial vector size
   real*8, dimension(0:mfact) :: fact(0:mfact) !< factorial vector, fact(n) = n!
