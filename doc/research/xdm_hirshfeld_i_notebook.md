@@ -56,19 +56,23 @@ LiH regression test `tests/009_intgrid/022_hirshfeld_i`. Generators in
     Na 0.40→0.14, Cl 1.12→1.45 (uncapped). Debug trace gated by param
     `xdm_hi_verbose` (default `.false.`).
 
+- **Stage 1 (VOLREF) DONE (§k, commit 47a09e1b):** `hirshfeld_i volref` computes
+  charge-matched `V_free(Q)` from our confined ions and rescales the α
+  denominator (`calc_coefs` optional `volscal`). KEY: VOLREF alone is *not*
+  physical — `V_free(Q)` and `α_free(Q)` are a matched pair; needs Stage 2.
+  Produced the from-code reference-treatment table (neutral scaling
+  overestimates cation α 20–35×).
+
 **IMMEDIATE NEXT ACTIONS (in order)**
-1. **Benchmark neutral vs HI vs HI-VOLONLY** on the test set (NaCl, LiF, H₂O,
-   CH₄ — `/tmp/xdmtest/*_mhi.cri`, `*_neu.cri`; add VOLONLY variant): tabulate
-   per-atom M1, V/Vfree, and total C6/energy. Goal: quantify the charge-aware
-   shift and the volumes-only-vs-moments-too split (RQ2).
-2. **Cross-check vs postg** (`~/projects/postg/postg`, neutral only) for the
-   neutral baseline C6/volumes.
-3. **Stage 1** (task #31): charge-matched volume reference V_ref(Q) in
-   `calc_coefs`/`xdm_wfn` (FI volume formula; we have ion densities). Then
-   **Stage 2** (#32): ion reference polarizabilities (Gould–Bučko set); decide
-   whether the uncapped anion α needs an XDM a1/a2 refit.
-4. Add a small ionic-molecule HI-XDM regression test (NaCl charges/C6) so the
-   stabilized SCF is protected.
+1. **Stage 2** (task #32, the real deliverable): compute confined-ion
+   polarizabilities `α_free(Q)` in the **same ld1.x family** as the densities
+   (no experimental data exists — must compute; sum-rule/TDDFT on the confined
+   ion), tabulate + interpolate, and use them *together* with Stage-1
+   `V_free(Q)` (FI formula `α=(V_AIM/V_free(Q))·α_free(Q)`). This makes VOLREF
+   physical and completes the FI-faithful model. Then re-benchmark and check
+   a1/a2 refit need (RQ5; FI needed none).
+2. Add a molecular HI-XDM regression test (task #36; needs shipped wfx/fchk —
+   `tests/zz_source` is download-gated/absent on the dev clone).
 
 **Molecular HI-XDM run recipe (the working pipeline, via fchk — NOT wfx):**
 ```
@@ -590,4 +594,55 @@ charge transfer over plain Hirshfeld, as documented.
 Inputs saved on dev-srv: `/tmp/xdmtest/{h2o,LiF,CH4,NaCl}_{neu,mhi,vol}.cri`.
 Conclusion: Option M is verified, self-consistent, and reference-validated
 on the neutral limit. Proceed to Stage 1.
+
+### 2026-05-30k — Stage 1 (VOLREF) implemented + the reference-treatment table (commit 47a09e1b)
+Added `xdm a1 a2 chf hirshfeld_i volref [wfcdir]`. After the HI SCF it
+integrates the **charge-matched free-ion reference volume** `V_free(Q)`
+from the same reference densities that define the HI weights (radial Gauss
+quadrature via `hirsh_i_refrho`), and rescales the polarizability
+denominator: `α = V_AIM·α_free⁰ / (frevol · V_free(Q)/V_free(0))`. The
+ratio cancels the method offset so the neutral baseline (Q=0) is exactly
+preserved. Per-atom report: `V_AIM, V_free(0), V_free(Q), ratio,
+α_neutscal, α_volref`. `calc_coefs` gained an optional `volscal` arg
+(absent ⇒ 1; default/neutral path unchanged). Regression test still passes.
+
+**Critical scientific finding — VOLREF alone is NOT a physical model.**
+`V_free(Q)` and `α_free(Q)` are a *matched pair* in the FI formula
+`α = (V_AIM/V_free(Q))·α_free(Q)`. For a cation `V_free(Q)` is small (small
+denominator → α inflates) and that is only correct because `α_free(Q)` is
+*also* small; for an anion both are large. Using `V_free(Q)` with the
+*neutral* `α_free⁰` therefore drives both ions the wrong way (e.g. NaCl
+α_volref(Na)=130.7 bohr³ — absurd). VOLREF is the **volume half /
+architecture** for the full FI model; Stage 2 (ion `α_free(Q)`) is required
+to make it physical. Logged so we don't misread it as a result.
+
+**The reference-treatment comparison, fully from critic2 (bohr³):**
+Per-atom, neutral-scaling polarizability `α = (V_AIM/V_free⁰)·α_free⁰`
+(what XDM does today) vs reference free-ion α:
+
+| atom (system) | HI charge | V_free(0) | **V_free(Q)** | α_neutscal | ref free-ion α | error |
+|---|---|---|---|---|---|---|
+| Na (NaCl) | +0.888 | 121.9 | **21.2** | 22.7 | ≈0.98 (Na⁺) | **23× high** |
+| Li (LiF)  | +0.931 | 99.6  | **7.7**  | 6.80 | ≈0.19 (Li⁺) | **35× high** |
+| Cl (NaCl) | −0.888 | 66.2  | **117.6**| 21.3 | ≈36 (Cl⁻ free) | cap erases it; ~1.7× low |
+| F (LiF)   | −0.931 | 19.3  | **53.2** | 6.52 | ≈10.6 (F⁻ free) | cap erases it; ~1.6× low |
+
+`V_free(0)→V_free(Q)` is the charge-matched reference volume interpolated
+from our confined ld1.x ions — "the same interpolation for the volumes"
+(Erin). The α failure is the headline: neutral scaling overestimates
+cation polarizability by 20–35× because the neutral alkali's diffuse
+valence shell (the entire ~24 Å³ / ~160 bohr³) is gone in the ion, and a
+volume ratio cannot remove a whole shell's response. Anions: the
+`min(ratio,1)` cap (grid path) discards their *enhanced* polarizability
+outright. Both are fixed only by charge-matched references (volume **and**
+α). [α in bohr³ = code units; ×0.148 → Å³. Ref ion α = free-ion static
+dipole polarizabilities; in-crystal anion values are smaller, widening the
+cation/anion asymmetry.]
+
+Caveat for any external use: in-molecule atoms are *fractional* ions
+(Na⁺⁰·⁸⁹), so the rigorous comparison interpolates the ion α to the
+fractional charge; the cation overestimate stays ~10–20× even then, so the
+conclusion is robust. Inputs: `/tmp/xdmtest/{NaCl,LiF,h2o,CH4}_volref.cri`.
+**Next: Stage 2** — compute confined-ion polarizabilities `α_free(Q)`
+(same ld1.x family) and interpolate, completing the FI-faithful model.
 
