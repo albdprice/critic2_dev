@@ -1017,3 +1017,37 @@ covalent C6; volume-scaling (2B) and neutral-volume routes preserve it.
 - Tiered plan: Tier 1 = S66×8 + X23 (no harm); Tier 2 = alkali-halide+oxide
   cohesive energies (the payoff). Both are campaigns (S66 wavefunctions; X23/
   solid periodic densities) but let us compare directly to published XDM/FI.
+
+### 2026-05-30v — validation campaign plan (molecules + solids); QE venue
+AP: run A/B/C discrimination on BOTH molecules and solids. Plan:
+
+**Molecular — ionic-discriminating subsets first (GMTKN55), then full sets.**
+The charge-aware routes (2A/2B/2C-kirk/2C-stern) should separate from neutral
+Hirshfeld only where ions/charge-transfer matter, so test there first:
+- **IL16** — ionic-liquid ion pairs (cation+anion). Most strongly ionic.
+- **AHB21** — anionic hydrogen-bonded complexes (stresses anion α).
+- **CHB6** — cationic hydrogen-bonded complexes (cation α).
+- **IONPI19** — ion–π (cation-π / anion-π) interactions.
+(62 complexes total; CCSD(T)/CBS-quality refs ship with GMTKN55.) These are
+the discriminator. THEN the standard non-ionic dispersion sets to confirm
+no-harm: **S22, S66/S66×8**, then large/diverse **DES370k**. (Pipeline:
+GMTKN55 geometries → DFT wavefunctions/fchk for monomers+complexes →
+`xdm 0.4 2.5 pbe hirshfeld_i alpharef … ` per route → interaction-energy /
+dispersion-contribution vs ref. Task #45.)
+
+**Solids — ionic sets (the payoff).** Alkali halides (LiF, NaCl, …), oxides
+(MgO, CaO), layered/TMD (MoS₂ vs RPA): the FI set (Gould–Bučko, 157%→23%)
+and the OdlR & Johnson XDM-for-solids cohesive-energy set (JCP 2012). Run via
+the grid path (`xdm grid … hirshfeld_i alpharef …`) on periodic
+pseudopotential/PAW densities; cohesive energy = E_bulk + E_disp − ΣE_atoms,
+vs experiment. (Task #40.)
+
+**QE venue.** `pw.x`+`pp.x`+PAW pseudos (kjpaw_psl PBE, fetchable from the QE
+library — got Na/Cl) are present, BUT the dev-srv apt QE build aborts at
+startup with a glibc `_FORTIFY_SOURCE` "buffer overflow detected"
+(`__snprintf_chk`) — a packaging bug, input-independent. → Run production QE
+on the lab HPC (per ARCHITECTURE.md: HPC ↔ Globus(LXC) ↔ tank/research), or
+rebuild QE in a container on dev-srv. critic2 side (the XDM grid + A/B/C
+routes) is ready; only the periodic-density generation is blocked on a
+working QE. NaCl rocksalt SCF input drafted at `/tmp/nacl_solid/` (a=10.6577
+bohr, ibrav=2, ecutrho=480, PAW) — ready to run once QE works.
