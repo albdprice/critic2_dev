@@ -775,3 +775,34 @@ proton), so our "0 ⇒ unavailable" convention falls H back to neutral α
   α from our confined ld1.x ions). Then validate (A/B/C) against reference
   C₆/binding + check a1/a2 refit (RQ5).
 
+### 2026-05-30n — Stage 2B DONE: element-specific volume-scaling exponents (commit 1457dbdd)
+Pulled the exponent table from the arXiv source of 1608.04161
+(`/tmp/gould/ex_1608.04161/paper.tex`, summary tables Rows 1–5, PGG kernel
+column `p`), embedded `p'_Z = p_Z − 0.615` as `pprime_gb` in param.F90
+(Z=1–54; Z>54 → 1.0). Cleanest reading of Gould's relation: it's the
+*standard XDM α-scaling with the exponent corrected from 1 to p'_Z*:
+
+  `α_AIM = α_free⁰ · (V_AIM/V_free⁰)^{p'_Z}`   (keyword `alpharef scale`).
+
+Charge-awareness enters only through the HI `V_AIM`; **no ion densities
+needed** (unlike 2A). At p'_Z=1 it is exactly the current XDM (so it's a
+clean drop-in). From-code per-atom α (a₀³):
+
+| atom (Q) | neutral-scaling (p'=1) | 2A (FI table) | **2B (p'_Z)** | p'_Z |
+|---|---|---|---|---|
+| Na (+0.89) | 22.7 | 14.4 | **9.3** | 1.455 |
+| Li (+0.93) | 6.80 | 5.5 | **4.3** | 1.145 |
+| Cl (−0.89) | 21.3 | 23.3 | **27.8** | 1.715 |
+| F (−0.93)  | 6.52 | 9.0 | **9.7** | 1.715 |
+
+2A and 2B **agree in direction** (cations↓, anions↑) and bracket each other
+— 2B pushes cations lower (closer to the true Na⁺) and anions slightly
+higher. E_disp (Ha): NaCl −8.40e-4 (2B) vs −8.99e-4 (2A) vs −1.151e-3
+(neutral); LiF −1.476e-4 (2B) vs −1.486e-4 (2A); H₂O −1.461e-4 (2B). Two
+independent charge-aware α routes now run from our pipeline. Inputs:
+`/tmp/xdmtest/{NaCl,LiF,h2o}_2b.cri`.
+- **Next: Stage 2C** — compute α from our confined ld1.x ions directly
+  (Sternheimer/coupled-KS in a radial code, or finite-field 3D confined DFT),
+  the most internally-consistent route; compare to 2A/2B. Then validate all
+  three vs reference C₆/binding and check the a1/a2 refit (RQ5).
+
