@@ -1684,8 +1684,8 @@ contains
              end if
              if (lalpharef == 1) then
                 afi = ion_alpha0(iz,qcel(i))
-                if (afi > 0d0 .and. vfq > 1d-30) then
-                   atpolov(i) = afi * v(i) / vfq          ! alpha_FI(Q) * V_AIM / V_free(Q)
+                if (afi > 0d0 .and. vf0 > 1d-30) then
+                   atpolov(i) = afi * v(i) / vf0          ! alpha_FI(Q) * V_AIM / V_free(0); GB alpha is frozen-orbital (~neutral-sized), so neutral V (see 30t)
                    write (uout,'(I3,X,A,X,1p,4(E13.6,X))') i, string(nameguess(iz,.true.)), &
                       qcel(i), apol0, afi, atpolov(i)
                 else
@@ -2321,8 +2321,13 @@ contains
     if (vfq <= 1d-30) return
 
     if (ialpha == 1) then
-       afi = ion_alpha0(iz,qreal)                 ! Gould-Bucko FI table
-       if (afi > 0d0) atpol = afi * vaim / vfq
+       ! Gould-Bucko FI table. Its alpha is referenced to FROZEN-ORBITAL ions
+       ! (orbitals ~ neutral => compact, ~neutral-sized), so the consistent
+       ! denominator is the NEUTRAL free volume vfree0, NOT the diffuse
+       ! box-confined V_free(Q): alpha_AIM = alpha_FI(Q) * V_AIM / V_free(0).
+       ! (Using V_free(Q) here over-reduces anions -- see notebook 30t.)
+       afi = ion_alpha0(iz,qreal)
+       if (afi > 0d0 .and. vfree0 > 1d-30) atpol = afi * vaim / vfree0
     elseif (ialpha == 4) then
        afi = ion_alpha_stern(iz,qreal)            ! our confined-ion Sternheimer ratios
        if (afi > 0d0) atpol = afi * vaim / vfq
