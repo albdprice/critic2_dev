@@ -1219,3 +1219,31 @@ magnitude would shift with optimal damping; the neutral↔charge-aware gap is
 robust. (3) single fixed-geometry point, no ZPE/thermal/relaxation; grid HI
 slightly over-ionizes (halide anions pin at −1). (4) free-atom degauss=0.01
 smearing entropy ~tens of meV.
+
+### 2026-05-31a — Molecular ionic benchmark (GMTKN55) scoping: all assets located
+AP chose the GMTKN55 ionic subsets as the molecular charge-aware
+discriminator. The cluster already has the full infrastructure — no rebuild:
+- **Geometries:** `/data/refdata/30_collection-GMTKN55/{il16,ahb21,chb6}/`
+  (complex + A/B monomer .xyz per reaction). IONPI19 not in this collection.
+- **References + stoichiometry:** `/data/refdata/10_din-GMTKN55/{il16,ahb21,
+  chb6}.din` (Grimme .din: reaction = +1·complex −1·A −1·B, CCSD(T)/CBS ref in
+  kcal/mol; e.g. il16_008 = −100.41 — strong ion-pair binding). il16=16,
+  ahb21=21, chb6=6 reactions.
+- **Existing XDM pipeline:** `/data/XDM_Psi4/` — AP's own **XDM-in-PSI4**
+  implementation (`~/projects/psi4_xdm_implement/`, conda env `psi4-xdm`) +
+  `xdm_params.py` (fitted a1/a2, 16 functionals × 4 bases), `xdm_lib.py`
+  (BJ dispersion, .din parser, stats), `datasets.py` registry, S22x5/S66x8/
+  3B-69/KB49 benchmarks. `06_master_workup.py` evaluates Alberto-style.
+- **FHI-aims PBE0** GMTKN55 calcs exist (`/data/FHIaims_GMTKN55/PBE0/IL16/…`,
+  per-species .out + .csc density) — energies available, densities in .csc.
+
+**Integration plan (critic2 charge-aware route):** for each species, Psi4
+(psi4-xdm env) PBE → molden/fchk → critic2 `xdm_wfn` (neutral + alpharef
+gould|scale|stern + the ld1_pbe wfcdir) → E_disp; E_int = [E_DFT+E_disp]
+(complex) − Σ monomers; compare to the .din CCSD(T) reference. The molecular
+mesh path (xdm_wfn) already works with our charge-aware routes, so this reuses
+proven code; the only new work is the species loop + the .din evaluation
+(can reuse xdm_lib's parser/stats). Start with **IL16** (16 ion pairs — the
+strongest ionic discriminator), then AHB21/CHB6, then the standard S22/S66×8
+for no-harm. NEXT: confirm the Psi4→critic2 wavefunction format on il16_008,
+then batch.
