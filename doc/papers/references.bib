@@ -1,0 +1,100 @@
+% Papers used in the charge-aware (Hirshfeld-I) XDM development.
+% Grouped: XDM foundations | charge-aware AIM dispersion (TS/TS+HI/FI) |
+% ion-reference data | partitioning | benchmarks. arXiv IDs noted where a free
+% preprint exists (PDFs downloaded into ./pdf/). Others are paywalled -> DOI only.
+
+%% ---------- XDM foundations (Becke-Johnson; Otero-de-la-Roza & Johnson) ----------
+@article{becke2007xdm,
+  author = {Becke, A. D. and Johnson, E. R.},
+  title  = {A unified density-functional treatment of dynamical, nondynamical, and dispersion correlations},
+  journal = {J. Chem. Phys.}, volume = {127}, pages = {124108}, year = {2007},
+  doi = {10.1063/1.2768530}}
+
+@article{johnson2005xhole,
+  author = {Johnson, E. R. and Becke, A. D.},
+  title  = {A post-Hartree-Fock model of intermolecular interactions},
+  journal = {J. Chem. Phys.}, volume = {123}, pages = {024101}, year = {2005},
+  doi = {10.1063/1.1949201}}
+
+@article{oterodelaroza2012solids,
+  author = {Otero-de-la-Roza, A. and Johnson, E. R.},
+  title  = {Van der Waals interactions in solids using the exchange-hole dipole moment model},
+  journal = {J. Chem. Phys.}, volume = {136}, pages = {174109}, year = {2012},
+  doi = {10.1063/1.4705760}}
+
+@article{oterodelaroza2013xdm,
+  author = {Otero-de-la-Roza, A. and Johnson, E. R.},
+  title  = {Non-covalent interactions and thermochemistry using XDM-corrected hybrid and range-separated hybrid density functionals},
+  journal = {J. Chem. Phys.}, volume = {138}, pages = {204109}, year = {2013},
+  doi = {10.1063/1.4807330}}
+
+%% ---------- charge-aware atoms-in-molecules dispersion ----------
+@article{tkatchenko2009ts,
+  author = {Tkatchenko, A. and Scheffler, M.},
+  title  = {Accurate molecular van der Waals interactions from ground-state electron density and free-atom reference data},
+  journal = {Phys. Rev. Lett.}, volume = {102}, pages = {073005}, year = {2009},
+  doi = {10.1103/PhysRevLett.102.073005}}
+
+@article{bucko2013tshi,
+  author = {Bu\v{c}ko, T. and Leb\`{e}gue, S. and Hafner, J. and \'{A}ngy\'{a}n, J. G.},
+  title  = {Improved description of the structure of molecular and layered crystals: ab initio DFT calculations with van der Waals corrections},
+  journal = {J. Chem. Theory Comput.}, volume = {9}, pages = {4293}, year = {2013},
+  doi = {10.1021/ct400694h}}
+
+@article{bucko2014tshi,
+  author = {Bu\v{c}ko, T. and Leb\`{e}gue, S. and \'{A}ngy\'{a}n, J. G. and Hafner, J.},
+  title  = {Extending the applicability of the Tkatchenko-Scheffler dispersion correction via iterative Hirshfeld partitioning},
+  journal = {J. Chem. Phys.}, volume = {141}, pages = {034114}, year = {2014},
+  doi = {10.1063/1.4890003}}
+
+% NOTE: doc/papers/s00894-017-3514-6.pdf is THIS paper (Heidar-Zadeh et al.), NOT a
+% Bucko periodic-MBD paper. The actual Bucko 2017 MBD paper is not in the folder.
+@article{heidarzadeh2017anion,
+  author = {Heidar-Zadeh, F. and Ayers, P. W. and Bultinck, P.},
+  title  = {Fractional nuclear charge approach to isolated anion densities for Hirshfeld partitioning methods},
+  journal = {J. Mol. Model.}, volume = {23}, pages = {348}, year = {2017},
+  doi = {10.1007/s00894-017-3514-6}}
+
+@article{gould2016fi,
+  author = {Gould, T. and Leb\`{e}gue, S. and \'{A}ngy\'{a}n, J. G. and Bu\v{c}ko, T.},
+  title  = {A fractionally ionic approach to polarizability and van der Waals many-body dispersion calculations},
+  journal = {J. Chem. Theory Comput.}, volume = {12}, pages = {5920}, year = {2016},
+  doi = {10.1021/acs.jctc.6b00925}, eprint = {1703.08786}, archivePrefix = {arXiv}}
+
+%% ---------- ion reference data + volume scaling (Gould) ----------
+@article{gouldbucko2016db,
+  author = {Gould, T. and Bu\v{c}ko, T.},
+  title  = {C6 coefficients and dipole polarizabilities for all atoms and many ions in rows 1-6 of the periodic table},
+  journal = {J. Chem. Theory Comput.}, volume = {12}, pages = {3603}, year = {2016},
+  doi = {10.1021/acs.jctc.6b00361}, eprint = {1604.02751}, archivePrefix = {arXiv}}
+
+@article{gould2016volscaling,
+  author = {Gould, T.},
+  title  = {How polarizabilities and C6 coefficients actually vary with atomic volume},
+  journal = {J. Chem. Phys.}, volume = {145}, pages = {084308}, year = {2016},
+  doi = {10.1063/1.4961643}, eprint = {1608.04161}, archivePrefix = {arXiv}}
+
+%% ---------- partitioning ----------
+@article{bultinck2007hi,
+  author = {Bultinck, P. and Van Alsenoy, C. and Ayers, P. W. and Carb\'{o}-Dorca, R.},
+  title  = {Critical analysis and extension of the Hirshfeld atoms in molecules},
+  journal = {J. Chem. Phys.}, volume = {126}, pages = {144111}, year = {2007},
+  doi = {10.1063/1.2715563}}
+
+@article{manz2019mclf,
+  author = {Manz, T. A. and Chen, T. and Cole, D. J. and Gabaldon Limas, N. and Fiszbein, B.},
+  title  = {Method to compute molecular dynamics and dispersion coefficients (MCLF)},
+  journal = {RSC Adv.}, volume = {9}, year = {2019}, doi = {10.1039/c9ra03003d}}
+
+%% ---------- benchmarks ----------
+@article{kannemann2010kb49,
+  author = {Kannemann, F. O. and Becke, A. D.},
+  title  = {van der Waals interactions in density-functional theory: intermolecular complexes},
+  journal = {J. Chem. Theory Comput.}, volume = {6}, pages = {1081}, year = {2010},
+  doi = {10.1021/ct900699r}}
+
+@article{goerigk2017gmtkn55,
+  author = {Goerigk, L. and Hansen, A. and Bauer, C. and Ehrlich, S. and Najibi, A. and Grimme, S.},
+  title  = {A look at the density functional theory zoo with the advanced GMTKN55 database},
+  journal = {Phys. Chem. Chem. Phys.}, volume = {19}, pages = {32184}, year = {2017},
+  doi = {10.1039/c7cp04913g}}

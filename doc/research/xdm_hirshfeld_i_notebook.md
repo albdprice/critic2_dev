@@ -1247,3 +1247,228 @@ proven code; the only new work is the species loop + the .din evaluation
 strongest ionic discriminator), then AHB21/CHB6, then the standard S22/S66×8
 for no-harm. NEXT: confirm the Psi4→critic2 wavefunction format on il16_008,
 then batch.
+
+### 2026-05-31b — il16_008 handshake WORKS; but IL16 is electrostatics-dominated
+End-to-end pipeline confirmed on the first ion pair (il16_008, neutral 17-atom
+complex = +1 cation A [16 at] + −1 anion B [1 at, monatomic]). Psi4 PBE/def2-TZVP
+→ fchk → critic2 `xdm_wfn` for all 4 routes. Driver `/tmp/run_il16_008.sh`,
+`/tmp/psi4_species.py` on dev-srv. (Gotcha: `set -u` kills the script at
+`source activate_xdm.sh` — conda's profile.d hits unbound vars; use `set +u`.)
+
+Result (Edisp in Ha; E_int in kcal/mol; B monatomic ⇒ Edisp(B)=0):
+| route   | Edisp(cplx) | Edisp(A) | Edisp_int | E_tot   | Δ vs neutral |
+|---------|-------------|----------|-----------|---------|--------------|
+| neutral | −0.01607    | −0.01039 | −3.56     | −109.65 | —            |
+| gould   | −0.01608    | −0.00922 | −4.30     | −110.39 | −0.74        |
+| scale   | −0.01581    | −0.00951 | −3.96     | −110.04 | −0.40        |
+| stern   | −0.01276    | −0.00765 | −3.20     | −109.29 | +0.36        |
+| ref(.din, CCSD(T)/CBS)                       | **−100.41** |          |
+
+Routes behave correctly & differ in the right direction: `stern` reduces the
+anion-side over-polarization (cplx Edisp −0.01276 vs −0.01607 neutral, ≈21% less),
+`gould` enhances it; `stern` lands closest to ref. a1/a2 used = 0.4/2.5 ≈ AP's
+cc-pVTZ-fitted PBE-XDM (0.4041, 2.6998), so damping is ~right.
+
+**KEY (negative) FINDING — IL16 is a weak discriminator.** All routes overbind by
+~9 kcal/mol, and that error is essentially PBE's (electronic E_int alone = −106.08;
+likely + some def2-TZVP BSSE), NOT dispersion's. Dispersion is only ≈3% of the
+binding and the *spread between routes* is <1 kcal/mol — swamped by the base-functional
+error. Molecular ion-PAIR binding is electrostatics-dominated, so batching the other
+15 IL16 (and largely AHB21/CHB6, H-bond-dominated) would mostly measure PBE, not our
+charge-aware dispersion. Mirrors the solid finding inverted: where the *differential*
+is dispersion (layered/ionic-molecular crystals, ion-π) the method shows; where it's
+electrostatics/H-bonding, it can't. DECISION NEEDED: point molecular validation at a
+dispersion-dominated ionic case (IONPI19 ion-π — but geometries not in the GMTKN55
+collection here) and/or switch metric to dispersion-only vs SAPT to isolate the term
+that actually changes. Solids remain the headline.
+
+### 2026-05-31c — unattended batch launched (AP away ~few hrs, "run as many as possible")
+Built a resumable orchestrator on dev-srv: `/tmp/gmtkn/run_batch.py` (+ updated
+`/tmp/gmtkn/psi4_species.py` which now writes a `<fchk>.edft` energy sidecar).
+Parses any Grimme `.din` (coeff/species pairs, `0` term, ref kcal/mol), runs Psi4
+PBE/def2-TZVP per unique species (3-wide ThreadPool, 4 threads/7 GB each; cached
+fchk+edft), then critic2 `xdm_wfn` ×4 routes (neutral/gould/scale/stern; cached
+`<sp>.<route>.edisp`), builds per-reaction E_int by stoichiometry, reports MAE/MSE
+per route vs ref. Fully resumable (skip cached) + fault-tolerant (per-species
+try/except, single-atom monomers→Edisp=0). a1/a2 = **0.4041/2.6998** (AP's
+cc-pVTZ-fitted PBE-XDM, ~def2-tzvp; supersedes the ad-hoc 0.4/2.5 of 31b, ~30%
+more damping ⇒ smaller |Edisp|, route ordering unchanged).
+Queue (ionic discriminators + small no-harm first): il16 → chb6 → ahb21 → s22 →
+ionichb(120 rxns) → s66(198). Dry-run verified all 6 sets parse and every species
+xyz exists (il16 48sp, chb6 18, ahb21 63, s22 66, ionichb 150, s66 198). Logs:
+`/tmp/gmtkn/master.log`; per-set `/tmp/gmtkn/results_<set>.txt`. Launched 12:41,
+PID 1773377 (setsid). To resume after a crash: same launch cmd — caches make it
+pick up where it stopped. ionichb/ssi/s66_disp are the bonus ionic/dispersion
+discriminators if time allows.
+Throughput note: Psi4 (not critic2 — one charged mesh-HI route = 27 s) is the
+bottleneck (~8–30 min/species; large organic cations dominate). Switched to 6×2
+(NWORK=6, 2 threads/4 GB) after a slow start; resumable via caches. Launch via
+`/tmp/gmtkn/launch.sh` (sources env, execs run_batch.py) fired with
+`nohup setsid bash launch.sh </dev/null >/dev/null 2>&1 &`. **Gotcha:**
+`pkill -f psi4_species.py` over ssh self-matches the ssh command line and kills
+its own session (rc 255) — never pattern-kill on a string that appears in your
+own command.
+
+### 2026-05-31d — IL16 partial (6/16): charge-aware effect is real but tiny here
+Directional read via `/tmp/gmtkn/analyze.py il16` on the 6 fully-cached reactions
+(a1/a2 = 0.4041/2.6998, NOT refit). Eint MAE/MSE vs CCSD(T)/CBS (kcal/mol):
+DFT-only 2.68/−2.59 · neutral 4.37/−4.37 · gould 4.35/−4.35 · scale 4.52/−4.52 ·
+stern 3.98/−3.98. **PBE alone already overbinds ion pairs (MSE −2.59); dispersion
+is always attractive so it pushes IL16 *further* into overbinding — every route is
+WORSE than DFT-only.** Route spread is only ~0.5 kcal (stern best, scale worst),
+swamped by the base-functional error. `stern` wins here only incidentally (it makes
+the least dispersion; less attraction helps when the base overbinds), not from
+better physics. ⇒ **IL16 is not a discriminating molecular test for charge-aware
+XDM.** Combined with the refit point (AP): a1/a2 refit can absorb a uniform
+dispersion-magnitude shift but NOT the per-species anion/cation α differential —
+yet that differential only *matters* where dispersion is a large fraction of binding
+(ionic solids ✓, and expected: layered/molecular ionic crystals, ion-π), not in
+electrostatics-dominated ion pairs / H-bonds. Solids remain the headline; molecular
+ionic GMTKN55 is a no-harm/where-it-doesn't-matter data point, not the showcase.
+
+### 2026-05-31e — ALL THREE molecular ionic sets done: a clean null (37 rxns)
+Full results (`/tmp/gmtkn/results_{il16,chb6,ahb21}.txt`; Eint MAE/MSE kcal/mol vs
+CCSD(T)/CBS; a1/a2=0.4041/2.6998 unrefit; 6×2 batch). IL16 lost 6/16 reactions to
+Psi4 SCF timeouts (large organic cations; failed-fast skip).
+| set            | n     | DFTonly      | neutral      | gould        | scale        | stern        |
+|----------------|-------|--------------|--------------|--------------|--------------|--------------|
+| il16 (ionpair) | 10/16 | 3.24/−3.19   | 4.83/−4.83   | 4.83/−4.83   | 4.98/−4.98   | 4.49/−4.49   |
+| chb6 (cat HB)  | 6/6   | 1.34/−0.58   | 1.35/−1.35   | 1.32/−0.60   | 1.30/−1.01   | 1.28/−0.67   |
+| ahb21 (an HB)  | 21/21 | 4.37/−4.37   | 4.94/−4.94   | 5.03/−5.03   | 5.01/−5.01   | 4.84/−4.84   |
+Findings, robust across 37 reactions:
+(1) PBE base OVERBINDS all three (MSE<0). Dispersion is always attractive ⇒ on
+il16/ahb21 it makes things WORSE than bare PBE; dispersion is not the missing piece
+for PBE-overbound ionic H-bonds. (2) Charge-aware ≈ neutral: routes differ by only
+0.07–0.49 kcal/mol MAE (chb6 within rounding). Per-species signal exists & is
+sign-consistent (stern trims anion-side dispersion ⇒ smallest MAE in every set) but
+is tiny because dispersion is a small fraction of these bindings. (3) Aside: PBE
+handles cationic HB (chb6 1.34) far better than anionic HB (ahb21 4.37) — anion SIE.
+⇒ CONFIRMED: charge-aware XDM is a no-op on molecular ion pairs / H-bonded ions
+(neither helps nor harms meaningfully). The method's value is confined to
+dispersion-dominated binding: ionic solids (done, decisive), and the still-untested
+layered/molecular ionic crystals & ion-π. Even post a1/a2-refit this won't change for
+these sets — refit rescales the (small) dispersion uniformly; the route differential
+that charge-aware adds is ~0.3 kcal here regardless. s22 no-harm running next.
+
+### 2026-06-01a — KB49 a1/a2 REFIT pipeline (canonical, per route) — launched
+AP asked to refit a1/a2 for gould/scale/stern on KB49 (the canonical XDM training
+set; Kannemann-Becke JCTC 2010). Reuse Alberto's canonical machinery exactly:
+- **Refdata source of truth:** `/home/albd/projects/refdata` (Alberto's; `20_kb49`
+  geoms + `10_din/kb49.din`, refs in kcal/mol). `/data/refdata` is a near-identical
+  mirror (used for the GMTKN batch). 49 reactions, 147 species, 0 missing.
+- **AP's fit method (`/data/XDM_Psi4/xdm_kb49_refit/02_collate_and_fit.py`):** each
+  species → JSON {base_energy, coords[bohr], c6,c8,c10,rc (NxN, a.u.)}; E_disp is
+  closed-form `calc_bj_dispersion` (xdm_lib): `rvdw=a1·rc + a2/0.52917721`,
+  `E=-Σ_{i<j}Σ_n Cn/(rvdw^n+d^n)`; fit (a1,a2) by `least_squares` minimizing RMSP
+  (relative residuals), init [0,1.4545], a2 in Å.
+- **Key enabler — critic2 emits the matrices directly:** the `coefficients (a.u.)`
+  block prints `i j C6 C8 C10 Rc Rvdw` per pair (Rc is a1/a2-independent). So one
+  Psi4 PBE/def2-TZVP per species (route-INDEPENDENT base_energy) + 4 critic2 runs
+  (route-dependent Cn) → 4 JSON sets → 4 fits. Parser `/tmp/gmtkn/kb49_makejson.py`
+  (coords from fchk, native bohr; diagonal self-terms dropped, unused by k=1 sum).
+- **VALIDATION (make-or-break):** parsed water-dimer block → AP's `calc_bj_dispersion`
+  reproduced critic2's own E_disp to **3.6e-14 Ha**. Parser+formula+units all exact.
+- Driver `/tmp/gmtkn/kb49_run.py` (4×3, resumable, fault-tolerant), launched via
+  `/tmp/gmtkn/kb49_launch.sh`; logs `/tmp/kb49/master.log`, fit → `/tmp/kb49/fit_results.json`.
+  Output table per route: a1, a2, MAE_fit, MAPD_fit, and MAE/MAPD at the current
+  default (0.4041/2.6998) for comparison. GMTKN batch PAUSED (192 species cached,
+  resumable) to give KB49 the full 12-core machine. Big aromatics (naphthalene
+  dimers 36 at, adenine-thymine 30 at) are dispersion-critical for the fit and must
+  converge — generous 90-min Psi4 timeout.
+
+### 2026-06-01b — KB49 run debugged (3 real blockers) → relaunched clean
+First KB49 attempt: 142/147 FAILED. Three independent bugs, all fixed:
+1. **Root disk 100% full** ⇒ Psi4 DFHelper `put_tensor: write error`. Stale
+   `/tmp/psi.*` scratch from the killed GMTKN orphans filled `/` (116 G). Fix:
+   cleared stale scratch + redirect `PSI_SCRATCH=/data/XDM_Psi4/psi_scratch_kb49`
+   (34 TB volume; `/data` root itself is not user-writable, but `XDM_Psi4/` is).
+   `psi4_species.py` now `IOManager.set_default_path()` to it.
+2. **OpenBLAS×OpenMP nesting hang** (the big one): conda psi4-xdm links OpenBLAS,
+   which "may hang" inside Psi4's OpenMP region — ~2 min/SCF-iter, so big aromatics
+   never reached convergence before timeout. AP's cluster used Intel MKL (no nesting
+   issue). Fix: `export OPENBLAS_NUM_THREADS=1` (Psi4 keeps its own OpenMP). ⇒ ~16
+   s/iter (7× faster); adenine_thymine_stack then converges in 24 iters to
+   −920.7768821613 Ha. SCF was never actually divergent — just too slow to finish.
+3. SCF settings now match AP's worker exactly (guess sad, freeze_core, ultrafine
+   590/99 grid, e/d_conv 1e-6, maxiter 80) + two-stage convergence (default DIIS,
+   SOSCF retry only on ConvergenceError). Also OOM note: an ML job sharing the box
+   OOM-killed a 13 G process at 16:20 — NOT a KB49 worker (those are ~5 G, all
+   survived); reniced KB49 to coexist, ML later stopped.
+Full batch relaunched 17:38 (4×3, OPENBLAS_NUM_THREADS=1, scratch on /data),
+resumes from 7 cached species. Fit (RMSP least_squares per route) auto-runs at end
+→ `/tmp/kb49/fit_results.json` + table in `/tmp/kb49/master.log`.
+
+### 2026-06-01c — KB49 REFIT RESULT (all 147 species converged, 0 fail, 49/49)
+Final fitted BJ-damping per route (PBE/def2-TZVP, RMSP objective, a2 in Å):
+| route   | a1     | a2(Å) | MAE(kcal) | MAPD   | MAE@old-def | MAPD@old-def |
+|---------|--------|-------|-----------|--------|-------------|--------------|
+| neutral | 0.0000 | 4.069 | 0.651     | 19.45% | 0.621       | 19.70%       |
+| gould   | 0.0000 | 4.491 | 0.679     | 21.06% | 0.717       | 23.94%       |
+| scale   | 0.1864 | 3.730 | 0.605     | 18.59% | 0.583       | 19.40%       |
+| stern   | 0.0000 | 4.143 | 0.632     | 19.51% | 0.933       | 27.04%       |
+(old-def = the borrowed 0.4041/2.6998.) Interpretation:
+1. After refit all four routes land in a tight band (MAE 0.60–0.68, MAPD 18.5–21%)
+   ⇒ charge-aware does NO HARM on the canonical neutral training set once its own
+   damping is fit. scale marginally best, gould marginally worst.
+2. **stern needs refitting most:** at the borrowed default it was badly off
+   (MAE 0.93, MAPD 27%) because it systematically shrinks α; its own fit recovers it
+   to 0.63/19.5%. Concrete proof the routes must be re-fit individually (AP's point).
+3. a1 pins to the a1≥0 boundary (=0) for neutral/gould/stern ⇒ PBE prefers a pure-a2
+   offset; effectively a 1-param fit. RMSP is dominated by the weakest complexes
+   (ch4·c2h4 etc., ref ~0.5 kcal). NB AP's own pbe-xdm cc-pVTZ/aug params have a1≠0
+   (0.40/0.71) — the a1→0 here may reflect def2-tzvp + critic2-vs-psi4 coefficient
+   differences + RMSP objective; worth a cross-check vs an MAE objective before
+   shipping these as production params.
+Pipeline (`kb49_run.py` + `kb49_makejson.py`, validated to 3.6e-14 Ha vs critic2)
+is reusable for any functional/basis. GMTKN batch still paused (192 cached) — resume
+or leave per AP. Task #43 (RQ5 refit) essentially done for KB49.
+
+### 2026-06-01d — DATA PERSISTED + QE/plane-wave KB49 refit packaged for HPC
+AP: persist all fitting data + do the KB49 refit again with QE plane-wave densities
+(ecutwfc 80 / ecutrho 800 Ry, extra-large isolated box, PAW).
+- **Persistence:** all generated data now under **`/data/Iterative_hirshfeld/`**
+  (34 TB vol; root `/` is small + was 100% full). Subdirs: `kb49_psi4/` (163 MB:
+  fchk, json/<route>, fit_results.json), `gmtkn_molecular/` (all set caches+results),
+  `scripts/`, `notebook/` (snapshot), `kb49_qe/`, `README.md`. (sudo-mkdir'd the
+  /data root dir, chown albd.)
+- **QE path validated, but can't run the chosen box on dev-srv:** fixed 45-bohr /
+  800-Ry box ⇒ ~405^3 FFT ⇒ QE wants ~16 GB/MPI-rank (~195 GB for 12); dev-srv
+  has 31 GB → OOM-killed before SCF. ⇒ needs a large-memory HPC node.
+- **Chain proven (small box):** qe_make_input → pw.x(MT box) → pp.x rho(0)+ELF(8)
+  → critic2 `xdm grid … zpsp …` → JSON. critic2 grid prints `+ Dispersion
+  coefficients` (i j C6 C8 C10 Rc; lower-triangle) + volumes/moments; ZPSP core
+  reconstruction OK (Vfree(C)=39.0 a0^3). New parser `kb49_makejson_qe.py` (coords
+  from xyz in bohr). Round-trip: fit `edisp` vs critic2 grid Evdw matches to the
+  periodic-image residual (2.4e-6 Ha @24-bohr → ~0 @45-bohr); critic2 Evdw =
+  Evdw6+8+10 (no C9 in energy). Consistent with AP's molecular (no-image, no-C9) fit.
+- **HPC package:** `/data/Iterative_hirshfeld/kb49_qe/HPC_package/` — scripts
+  (qe_make_input, run_species.sh, kb49_makejson_qe, zpsp_for, **self-contained**
+  fit_kb49_qe.py), `submit_kb49_qe.slurm` (array 1-147, 256 GB/8 MPI/8 h),
+  pp/ (8 kjpaw_psl 1.0.0 PAW), geom/ (147 xyz), ld1_pbe/ (137 anion refs), kb49.din,
+  species.list, NOTES.md. **Key dep flagged in NOTES:** cluster must build the FORK
+  branch `research/xdm-hirshfeld-i` (gould/scale/stern + grid alpharef are ours, not
+  upstream). Brings back only `results/<route>/*.json` (few MB) + fit_results_qe.json;
+  cubes (~44 GB) stay on node scratch. Ready for AP's HPC-submitting agent.
+
+### 2026-06-03 — full literature ingested → doc/research/LITERATURE_INTEGRATION.md
+Read all 16 PDFs in doc/papers/ (4 parallel readers) and wrote a synthesis mapping
+every paper to our routes + the numbers to compare against. See
+**`doc/research/LITERATURE_INTEGRATION.md`** (+ `references.bib`, mirrored under
+`/data/Iterative_hirshfeld/papers/`). Corrections + action items it surfaced:
+- **`s00894-017-3514-6.pdf` = Heidar-Zadeh/Ayers/Bultinck 2017** (fractional-nuclear-charge
+  anion densities), NOT Bučko-2017 MBD. Useful for unbound-anion refs; bib fixed.
+- **KB49 = KB65 − noble-gas dimers.** Our neutral refit (a1=0.4041/a2=2.6998) reproduces
+  **OdlR&J 2013 PBE plane-wave a1=0.4073/a2=2.4150** (a1 matches → neutral route validated).
+  Do NOT compare to Kannemann–Becke PW86PBE 0.82/1.16 (different functional).
+- **IONPI19 ∉ GMTKN55** (the 3 ionic subsets are AHB21/CHB6/IL16). Drop it from #45 title.
+- **[VERIFY, high] gould anion tier:** must be the Gould–Bučko *embedded/frozen-orbital*
+  anion α (Appendix B), NOT the free self-consistent values (F⁻ 15.5 vs embedded). If wrong,
+  gould over-polarizes anions. (#37 re-check.)
+- **scale (p'=p−0.615) is a DEPARTURE from FI**, which used linear p'=1 and rejected the
+  exponent. FI-faithful = gould+linear. Document the distinction.
+- **[RUN, high] B86bPBE ionic solids:** OdlR&J 2020 (`xdmmx.pdf`) get ionic solids right via
+  the B86b *exchange* functional (lattice MAE 0.060 Å), not charge-aware refs — and name HI
+  as the unfilled XDM gap. Strongest paper claim ⇒ run charge-aware on B86bPBE too
+  (complementary: their B86b fixes geometry/B0, our charge-aware fixes cohesive energy).
+- Literature precedent: charge-aware needs little/no damping refit (FI β unchanged; TS/HI
+  s_R 0.94→0.95) — consistent with our near-neutral refit (stern the exception).
