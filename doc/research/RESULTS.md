@@ -72,6 +72,26 @@ anions ↑ vs neutral scaling. Headline for the "why not just scale neutral volu
 argument: neutral scaling overestimates **cation** α **20–35×** (Na 22.7 vs Na⁺ ~0.98;
 Li 6.8 vs Li⁺ ~0.19) — a whole shell is gone, a volume ratio cannot remove it.
 
+## R5 — Double-anion reference polarizability: a method finding
+Investigating q=−2 references (O²⁻/S²⁻ in oxides/sulfides) revealed that the two
+*table/linear-response* routes cannot be extended past −1, but the *density-based*
+routes can:
+
+| method for O²⁻ | value | verdict |
+|---|---|---|
+| uncoupled Sternheimer (linear response) | α = {982,−31,0.99,−0.07,107,1.74} vs box | **diverges** (2nd e⁻ unbound) |
+| Gould–Bučko benchmark (free ion) | grossly diffuse | unphysical |
+| **density-moment (Kirkwood ⟨r²⟩²/N)** | 17.5→64→**82** (q=0,−1,−2), α≈24 a₀³ | **finite, monotonic** (right order vs physical ~14 a₀³) |
+| q=−1 clamp (current gould/stern) | α(O⁻)≈19 a₀³ | reasonable proxy for in-crystal O²⁻ (~14) |
+
+**Finding:** a free double anion is not bound, so its linear-response polarizability is
+ill-defined (Sternheimer garbage across the whole table); but the *bound confined
+ground-state density* is well-defined, so density-moment estimators work. **Consequence:**
+gould/stern deliberately clamp at −1 (documented, justified proxy); **`compute`/`scale`
+(density/volume-based) are the correct routes for multiply-charged anions.** No change to
+the 6-solid results (oxides used the −1 clamp already). Diagnostic:
+`/data/Iterative_hirshfeld/sternheimer_alpha_z84.dat`.
+
 ## Provenance quick-map
 - R1: `/data/Iterative_hirshfeld/` solid runs (QE + critic2 grid).
 - R2: `/data/Iterative_hirshfeld/gmtkn_molecular/results_*.txt`.

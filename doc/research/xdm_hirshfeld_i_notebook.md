@@ -1485,3 +1485,26 @@ alkali "anion" entries are structurally unreachable. Tier only matters for non-h
 with large charge (N³⁻/S²⁻ nitrides/sulfides — untested). Added a TIER NOTE comment in
 param.F90; not a bug in current work, a scoped future refinement (embedded tier from the
 Gould–Bučko SI, task #44 territory). Committed to fork.
+
+### 2026-06-03b — double-anion α: Sternheimer DIVERGES, density-moment WORKS (definitive)
+Attempted to extend the table routes (gould/stern) to q=−2 for oxides/sulfides/nitrides.
+**Result: the naive fix is wrong — a real negative result, and the correct route is different.**
+- **Uncoupled Sternheimer fails universally for double anions.** Box scan α(O,q) vs rmax
+  (a₀³): neutral O converges cleanly (6.81→7.256); O⁻ stable-ish (~13→20); **O²⁻ garbage**:
+  {982, −31, 0.99, −0.07, 107, 1.74} for rmax={6,8,10,12,14,16}. S²⁻ same: {270,−17,42,532}.
+  Full-PT batch −2 column is huge/negative everywhere (He²⁻ 428, B²⁻ −0.77, …). Physics: the
+  2nd extra electron of a free A²⁻ is unbound → linear-response polarizability ill-defined.
+- **Density-moment (Kirkwood) estimator IS well-defined for the same species**, because it
+  only needs the BOUND confined ground-state density (o_q−2.rho integrates to 10.000 e).
+  ⟨r²⟩²/N for O: 17.5 (q0) → 64.3 (−1) → 81.8 (−2) — monotonic, finite; O²⁻ ⇒ α≈24 a₀³
+  (right order vs physical in-crystal O²⁻ ~14 a₀³), vs Sternheimer's 91/garbage.
+- **RESOLUTION:** (1) gould/stern stay clamped at −1 — DELIBERATE, documented in
+  `ion_alpha0`/`ion_alpha_stern`; the −1 value (α(O⁻)≈19) is a physical proxy for in-crystal
+  O²⁻ (~14). (2) **The density-based routes (`alpharef compute`/`scale`) are the correct
+  choice for multiply-charged anions** — they handle any charge via the bound density/volume,
+  no divergence. (3) A strictly FI-faithful gould at −2 would need the frozen-orbital embedded
+  tier (bounded), not the free benchmark (diffuse) — not ingested (future/external).
+- **No change to validated results:** the 6-solid oxides used stern clamped at −1 already;
+  that clamp is now justified, not a bug. `batch_sternheimer.py` extended to compute −2 as a
+  DIAGNOSTIC only (rstern_m2 emitted for the record, NOT ingested). Provenance:
+  `/data/Iterative_hirshfeld/sternheimer_alpha_z84.dat` (full batch incl −2).

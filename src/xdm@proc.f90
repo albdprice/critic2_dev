@@ -2246,6 +2246,12 @@ contains
     if (iz < 1 .or. iz > maxzat0) return
     a0 = alpha_gb_0(iz)
     if (a0 <= 0d0) return
+    ! Charge clamped to [-1,+1] DELIBERATELY (table only goes to +-1). Gould-Bucko
+    ! tabulate double anions only in the "benchmark" (free) tier, where they are
+    ! grossly diffuse/unphysical (free A2- unbound); the FI-correct bounded value is
+    ! the frozen-orbital embedded tier (not ingested here). The q=-1 clamp is a
+    ! physical proxy for the in-crystal double anion. For genuine |q|>1 anions use
+    ! the density-based routes (alpharef compute / scale). See ion_alpha_stern.
     qc = min(max(q,-1d0),1d0)
     if (qc >= 0d0) then
        aend = alpha_gb_p1(iz)          ! q = +1
@@ -2271,6 +2277,15 @@ contains
     real*8 :: a, qc, ratio, f
     a = 0d0
     if (iz < 1 .or. iz > maxzat0) return
+    ! Charge clamped to [-1,+1] DELIBERATELY. The uncoupled-Sternheimer table
+    ! (rstern) is only defined to q=-1: a free double anion (O2-, S2-, ...) is
+    ! not a bound species, so its linear-response polarizability diverges
+    ! (verified: confined O2- alpha = {982,-31,0.99,-0.07,107,1.7} across boxes;
+    ! universal across the table). The q=-1 value is a physical proxy for the
+    ! in-crystal double anion (alpha(O-)~19 a0^3 ~ experimental in-crystal O2-
+    ! ~14 a0^3). For genuine |q|>1 anions use the DENSITY-based routes
+    ! (alpharef compute / scale), which use the bound confined ground-state
+    ! density (well-defined, unlike the linear response) and handle any charge.
     qc = min(max(q,-1d0),1d0)
     if (qc >= 0d0) then
        f = qc;  ratio = (1d0-f) + f*rstern_p1(iz)
