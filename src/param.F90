@@ -263,6 +263,18 @@ module param
   ! charge-aware XDM (Stage 2A): alpha_free(Q) is linearly interpolated in
   ! electron number between the bracketing integer charge states. 0d0 marks
   ! a species not tabulated. Provenance file: dat/xdm_ion_alpha_gould_bucko_2016.dat
+  !
+  ! TIER NOTE (verified 2026-06): these are the "benchmark" (free, self-consistent)
+  ! anion polarizabilities of Table 4, NOT the "minimal-chemistry" frozen-orbital
+  ! embedded-anion tier (Appendix B) that FI-MBD uses. The distinction is immaterial
+  ! for HALIDE anions (F-, Cl-, Br-, I-), which Gould-Bucko compute self-consistently
+  ! in BOTH tiers -> identical values -> the alkali-halide/oxide validation is
+  ! unaffected. It only differs for non-halide anions carrying large charge
+  ! (e.g. N3-, S2- in nitrides/sulfides). The grossly-diffuse electropositive-metal
+  ! "anion" entries (Li- 1180, Na- 1310, K- 2090 ...) are physically never reached:
+  ! ion_alpha0 clamps |q|<=1, and those atoms are always cations (q>0), so their
+  ! q=-1 endpoint is never interpolated to. For strict FI-faithfulness on non-halide
+  ! anions, swap alpha_gb_m1 for the embedded/frozen-orbital tier (Gould-Bucko SI).
   real*8, parameter :: alpha_gb_m1(1:maxzat0) = (/&
       216d0, 0d0, 1180d0, 0d0, 32.9d0, 15.5d0,&
       8.04d0, 5.4d0, 15d0, 0d0, 1310d0, 0d0,&

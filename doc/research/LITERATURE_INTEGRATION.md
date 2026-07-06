@@ -32,12 +32,17 @@ PDFs are at `doc/papers/` and mirrored at `/data/Iterative_hirshfeld/papers/pdf/
    a separate later set; treat it as optional/external, not part of GMTKN55. (Task #45
    title should drop IONPI19.)
 
-4. **gould-route anion tier — VERIFY (possible bug).** The Gould–Bučko DB has two anion
-   tiers: free self-consistent α (hugely overestimated: F⁻ α(0)=15.5, H⁻=216, Li⁻=1180 a₀³)
-   and the **"minimal-chemistry" frozen-orbital *embedded*-anion tier** (Appendix B). FI-MBD
-   uses the **embedded** tier. We must confirm our Stage-2A ingestion (#37) took the
-   embedded/frozen-orbital anion α, **not** the free self-consistent values — otherwise the
-   gould route over-polarizes anions. This is the single most important verification.
+4. **gould-route anion tier — VERIFIED 2026-06 (benchmark tier; results unaffected).**
+   Confirmed: `alpha_gb_m1` in `param.F90` (provenance `dat/xdm_ion_alpha_gould_bucko_2016.dat`,
+   header "benchmark") is the **free self-consistent** anion tier (F⁻=15, Cl⁻=30.3, Li⁻=1180,
+   Na⁻=1310), NOT the FI embedded/frozen-orbital tier. **Impact: none for anything validated.**
+   (a) **Halide anions are self-consistent in BOTH tiers ⇒ identical**, so the alkali-halide
+   solids (F⁻/Cl⁻) are correct. (b) Oxide O is clamped at −1 with α=5.4≈neutral ⇒ tier-invariant.
+   (c) `ion_alpha0` clamps |q|≤1 and cations interpolate neutral→+1, so the grossly-diffuse
+   electropositive-metal "anion" entries are **structurally never reached**. The tier only
+   differs for **non-halide anions with large charge (N³⁻, S²⁻ — not in our test set)**; strict
+   FI-faithfulness there = swap `alpha_gb_m1` for the embedded tier (Gould–Bučko SI). Documented
+   in the `param.F90` comment.
 
 5. **scale-route is a departure from FI, by design.** FI-MBD uses **linear** volume scaling
    (p'=1) and Gould explicitly tested the p'≈p−0.615 exponent (his 2016 JCP) and reported it

@@ -1472,3 +1472,16 @@ every paper to our routes + the numbers to compare against. See
   (complementary: their B86b fixes geometry/B0, our charge-aware fixes cohesive energy).
 - Literature precedent: charge-aware needs little/no damping refit (FI β unchanged; TS/HI
   s_R 0.94→0.95) — consistent with our near-neutral refit (stern the exception).
+
+### 2026-06-03a — gould anion tier VERIFIED (benchmark, not embedded; results unaffected)
+Checked the literature action item. `alpha_gb_m1` (param.F90; provenance
+`dat/xdm_ion_alpha_gould_bucko_2016.dat` header = "benchmark") is the Gould–Bučko
+**free self-consistent** anion tier (F⁻=15, Cl⁻=30.3, O⁻=5.4, Li⁻=1180, Na⁻=1310,
+K⁻=2090), NOT the FI "minimal-chemistry" embedded/frozen-orbital tier. **Impact on our
+validated results = NONE:** (1) HALIDE anions are self-consistent in both tiers → identical
+→ alkali-halide solids correct; (2) oxide O clamped at −1, α=5.4≈neutral → tier-invariant;
+(3) `ion_alpha0` clamps |q|≤1 and cations interpolate neutral→+1, so the grossly-diffuse
+alkali "anion" entries are structurally unreachable. Tier only matters for non-halide anions
+with large charge (N³⁻/S²⁻ nitrides/sulfides — untested). Added a TIER NOTE comment in
+param.F90; not a bug in current work, a scoped future refinement (embedded tier from the
+Gould–Bučko SI, task #44 territory). Committed to fork.
