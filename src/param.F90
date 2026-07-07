@@ -341,6 +341,36 @@ module param
       0d0, 0d0, 0d0, 0d0, 0d0, 0d0,&
       0d0, 0d0, 0d0, 0d0, 0d0, 0d0,&
       0d0, 0d0, 0d0 /)
+  ! DOUBLE-anion (q=-2) static polarizabilities alpha(0), a0^3, from the Gould-Bucko
+  ! "minimal chemistry" EMBEDDED/frozen-orbital tier (ModelMixed_Scaled.dat, ACS SI of
+  ! JCTC 12, 3603 (2016); alpha(0)=a1/O1^2+a2/O2^2). These are the FI-faithful, bounded
+  ! double-anion references (O2- 5.85, S2- 26.3 a0^3 -- NOT the divergent free values):
+  ! the frozen neutral-atom potential confines the 2nd extra electron. 0d0 = not a bound
+  ! double anion -> ion_alpha0 falls back to the q=-1 clamp. (The single-anion column
+  ! alpha_gb_m1 already equals this embedded tier for every accessed anion: F 15.0,
+  ! O 5.40, S 24.1, Cl 30.3, N 8.04 all match.) Provenance: doc/papers/gould_si_*.
+  real*8, parameter :: alpha_gb_m2(1:maxzat0) = (/&
+      0d0, 0d0, 0d0, 0d0, 39.09d0, 16.59d0,&
+      8.694d0, 5.855d0, 0d0, 0d0, 0d0, 0d0,&
+      137.8d0, 63.67d0, 36.66d0, 26.28d0, 0d0, 0d0,&
+      0d0, 0d0, 134.5d0, 109.5d0, 94.11d0, 82.86d0,&
+      74.32d0, 66.12d0, 59.48d0, 53.98d0, 0d0, 0d0,&
+      134.1d0, 68.74d0, 43.91d0, 34.72d0, 0d0, 0d0,&
+      0d0, 0d0, 181.3d0, 135.8d0, 113.7d0, 99.42d0,&
+      89.95d0, 81.93d0, 75.44d0, 70.18d0, 0d0, 0d0,&
+      171.5d0, 95.76d0, 64.94d0, 53.43d0, 0d0, 0d0,&
+      0d0, 0d0, 0d0, 0d0, 0d0, 0d0,&
+      0d0, 0d0, 0d0, 0d0, 0d0, 0d0,&
+      0d0, 0d0, 0d0, 0d0, 0d0, 0d0,&
+      0d0, 0d0, 0d0, 0d0, 0d0, 0d0,&
+      0d0, 0d0, 0d0, 0d0, 0d0, 0d0,&
+      0d0, 0d0, 0d0, 0d0, 0d0, 0d0,&
+      0d0, 0d0, 0d0, 0d0, 0d0, 0d0,&
+      0d0, 0d0, 0d0, 0d0, 0d0, 0d0,&
+      0d0, 0d0, 0d0, 0d0, 0d0, 0d0,&
+      0d0, 0d0, 0d0, 0d0, 0d0, 0d0,&
+      0d0, 0d0, 0d0, 0d0, 0d0, 0d0,&
+      0d0, 0d0, 0d0 /)
 
   ! Element-specific polarizability volume-scaling exponent p'_Z, such that
   ! alpha/alpha^R ~ (V/V^R)^{p'_Z}. From Gould, J. Chem. Phys. 145, 084308

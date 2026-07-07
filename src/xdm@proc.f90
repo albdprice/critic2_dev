@@ -2235,34 +2235,44 @@ contains
   !> [-1,+1] (the tabulated range); a missing ion endpoint falls back to the
   !> neutral value (no charge correction for that side).
   function ion_alpha0(iz,q) result(a)
-    use param, only: alpha_gb_m1, alpha_gb_0, alpha_gb_p1, maxzat0
+    use param, only: alpha_gb_m1, alpha_gb_0, alpha_gb_p1, alpha_gb_m2, maxzat0
     integer, intent(in) :: iz
     real*8, intent(in) :: q
     real*8 :: a
 
-    real*8 :: qc, a0, aend, f
+    real*8 :: qc, a0, aend, f, am1
 
     a = 0d0
     if (iz < 1 .or. iz > maxzat0) return
     a0 = alpha_gb_0(iz)
     if (a0 <= 0d0) return
-    ! Charge clamped to [-1,+1] DELIBERATELY (table only goes to +-1). Gould-Bucko
-    ! tabulate double anions only in the "benchmark" (free) tier, where they are
-    ! grossly diffuse/unphysical (free A2- unbound); the FI-correct bounded value is
-    ! the frozen-orbital embedded tier (not ingested here). The q=-1 clamp is a
-    ! physical proxy for the in-crystal double anion. For genuine |q|>1 anions use
-    ! the density-based routes (alpharef compute / scale). See ion_alpha_stern.
-    qc = min(max(q,-1d0),1d0)
+    ! Charge interpolation, clamped to [-2,+1]. FI-faithful for double anions:
+    ! alpha_gb_m2 holds the Gould-Bucko "minimal chemistry" EMBEDDED/frozen-orbital
+    ! double-anion alpha (bounded, e.g. O2- 5.85 a0^3), so q in [-2,-1] interpolates
+    ! linearly between alpha_gb_m1 (-1) and alpha_gb_m2 (-2). Where no bound double
+    ! anion is tabulated (alpha_gb_m2<=0) we clamp at the -1 value. (stern still clamps
+    ! at -1: its uncoupled-Sternheimer -2 diverges -- see ion_alpha_stern.)
+    qc = min(max(q,-2d0),1d0)
     if (qc >= 0d0) then
        aend = alpha_gb_p1(iz)          ! q = +1
        if (aend <= 0d0) aend = a0      ! no cation datum: no correction
-       f = qc
-    else
+       a = (1d0-qc)*a0 + qc*aend
+    else if (qc >= -1d0) then
        aend = alpha_gb_m1(iz)          ! q = -1
        if (aend <= 0d0) aend = a0
        f = -qc
+       a = (1d0-f)*a0 + f*aend
+    else                               ! -2 <= qc < -1
+       am1 = alpha_gb_m1(iz)           ! the -1 endpoint
+       if (am1 <= 0d0) am1 = a0
+       aend = alpha_gb_m2(iz)          ! q = -2 (embedded, bounded)
+       if (aend <= 0d0) then
+          a = am1                      ! no bound double anion: clamp at -1
+       else
+          f = -qc - 1d0                ! 0 at q=-1, 1 at q=-2
+          a = (1d0-f)*am1 + f*aend
+       end if
     end if
-    a = (1d0-f)*a0 + f*aend
   end function ion_alpha0
 
   !> Charge-aware static polarizability (a0^3) from the confined-ion

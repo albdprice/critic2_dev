@@ -1527,3 +1527,17 @@ Two closing pieces on the multiply-charged-anion reference question.
 GOULD EMBEDDED DATA (for AP): the minimal-chemistry frozen-orbital double-anion α are in the
 ACS SI ASCII files of Gould & Bučko JCTC 12,3603 (2016) doi 10.1021/acs.jctc.6b00361 (NOT in the
 arXiv preprint — that has only the method). Gold-standard O²⁻/S²⁻ values: Holka 2014 CCSD(T).
+
+### 2026-06-03d — gould route now FI-faithful at q=−2 (embedded double-anion tier ingested)
+AP grabbed the Gould-Bucko SI + Holka 2014 → papers/. Staged to doc/papers/
+(gould_si_ct6b00361/ ASCII data committed; PDFs to /data). Extracted the "minimal
+chemistry" EMBEDDED/frozen-orbital double-anion alpha(0)=a1/O1^2+a2/O2^2 from
+ModelMixed_Scaled.dat → new **alpha_gb_m2** in param.F90 (O2- 5.85, S2- 26.3, N2- 8.69,
+C2- 16.6 a0^3 — bounded, NOT the divergent free values). `ion_alpha0` now interpolates
+m1(-1)->m2(-2), clamps at -2 where a bound double anion exists, else -1 (unchanged).
+Confirmed: embedded single-anion column == our benchmark alpha_gb_m1 exactly (F 15.0,
+O 5.40, S 24.1, Cl 30.3, N 8.04). MgO re-run: gould C6(O-O) 65.4->70.9 (+8%, O2-
+5.40->5.85), Evdw -0.0091->-0.0098; neutral unchanged. Small (the -1 clamp was a good
+proxy, as the literature predicted) but gould is now strictly FI-faithful at -2. stern
+stays -1-clamped (its Sternheimer -2 diverges). Gold-standard cross-check available:
+Holka JCP 141,214303 (2014) CCSD(T) confined O2-/S2-.
