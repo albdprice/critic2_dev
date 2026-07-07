@@ -368,6 +368,8 @@ module param
       0d0, 0d0, 0d0, 0d0, 0d0, 0d0,&
       0d0, 0d0, 0d0, 0d0, 0d0, 0d0,&
       0d0, 0d0, 0d0, 0d0, 0d0, 0d0,&
+      0d0, 0d0, 0d0, 0d0, 0d0, 0d0,&
+      0d0, 0d0, 0d0, 0d0, 0d0, 0d0,&
       0d0, 0d0, 0d0 /)
 
   ! Element-specific polarizability volume-scaling exponent p'_Z, such that
