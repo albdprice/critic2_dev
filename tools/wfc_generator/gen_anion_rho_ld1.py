@@ -99,7 +99,7 @@ def run_ld1(outdir, sym, Z, conf, rmax, xmin, dx, ld1):
     inp = os.path.join(outdir, f"{sym}.ld1in")
     with open(inp,"w") as f:
         f.write("&input\n")
-        f.write(f"  title='{sym}',\n  zed={Z}.,\n  rel=1,\n")
+        f.write(f"  title='{sym}',\n  zed={float(Z):.6g},\n  rel=1,\n")  # :.6g handles fractional Z_eff
         f.write(f"  config='{conf}',\n  iswitch=1,\n  dft='PBE'\n")
         f.write(f"  max_out_wfc=99,\n")   # output ALL orbitals (needed for heavy atoms)
         f.write(f"  xmin={xmin},\n  dx={dx},\n  rmax={rmax},\n/\n")

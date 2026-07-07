@@ -46,7 +46,7 @@ Last updated: **2026-06-03**
 4. **[METHOD, med] a1/a2 refit robustness** — MAE-vs-RMSP cross-check (a1→0 boundary);
    validate refit params on an independent set; finish the QE plane-wave refit.
 5. **[CODE, med] Molecular HI-XDM regression test** (#36) — needs shipped wfx/fchk.
-6. **[RESOLVED 2026-06] Multiply-charged anion references (O²⁻/S²⁻/N³⁻).** Investigated:
+6. **[RESOLVED 2026-06] Multiply-charged anion references.** O²⁻/S²⁻ done (embedded α + density routes). **N³⁻/P³⁻/As³⁻ now covered** via the Z_eff generator (Heidar-Zadeh) → density routes. q=−4 (C,Si) not robust yet (needs HOMO~0 criterion); falls back to −2/−3 clamp. Investigated:
    the linear-response (Sternheimer) and free-benchmark (Gould) routes cannot give a
    double-anion α (unbound 2nd electron → diverges/diffuse). The **density-based routes
    (`compute`/`scale`) handle any charge via the bound confined density** and are the

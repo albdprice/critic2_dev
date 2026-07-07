@@ -1561,3 +1561,28 @@ via Gould's Z^(1/3) formula). PATH TO FULL COVERAGE: (1) generate confined -3/-4
 (extend batch_anions_ld1.sh: N,P,As at -3; C,Si at -4) - also lets HI reach -3 not clamp at -2;
 (2) route through scale/compute. gould/stern stay capped at -2/-1 (no deeper reference exists).
 Fixed now: alpha_gb_m2 extended Z<=54 -> Z<=84 (full Gould embedded -2 set).
+
+### 2026-06-03f — deep-anion (-3) references via Z_eff (Heidar-Zadeh); -4 not robust yet
+AP: implement the Z_eff generator to cover -3/-4. DONE for -3, honest limit at -4.
+- **Method:** `tools/wfc_generator/gen_anion_rho_zeff.py` (Heidar-Zadeh, JMM 23:348 2017):
+  the confined TRUE-Z ld1.x SCF diverges for free -3/-4 (verified to rmax=1.0). Fix: scan
+  the effective nuclear charge Z_eff>=Z upward until ld1.x BINDS all N electrons (in the
+  confinement box), take rho(r;Z_eff), then coordinate-rescale to the true-Z cusp/scale
+  rho(r;Z)=(Z/Z_eff)^3 rho((Z/Z_eff)r;Z_eff) (preserves N, gives cusp -2Z, expands since
+  Z<Z_eff). Needed a zed-format fix in gen_anion_rho_ld1.py (`:.6g`, was `{Z}.` = int-only,
+  broke fractional Z_eff). Box alpha=3.0 for deep anions (tighter than the -1/-2 3.6 keeps
+  Z_eff low -> more diffuse/monotonic).
+- **q=-3 DONE + monotonic** (Kirkwood <r2>^2/N > the -2 ref): N3- 207 (Z_eff 8.75), P3- 3199
+  (15.25), As3- 843->881 (33.5). Installed n_q-3/p_q-3/as_q-3.rho in ld1_pbe. `hi_qoff=5`
+  already admits down to -5, so NO code change: hirsh_i_qfloor auto-detects -3, the density
+  interp brackets to it, `compute` uses <r2>(-3), `scale` uses the (deeper) -3 partition
+  volume. Nitrides/phosphides/arsenides now reachable.
+- **q=-4 NOT shipped** (C4-,Si4-): the fixed-box smallest-binding-Z_eff lands too high (net-1
+  auxiliary), giving a too-COMPACT rescaled density (C4- Kirkwood 194 << C2- 2110, non-monotonic).
+  Needs the stricter HOMO~0 (zero-EA) large-box criterion to get a marginally-bound diffuse
+  auxiliary -- a further refinement. -4 anions fall back to the -2/-3 clamp (defensible: deep
+  in-crystal anions are strongly suppressed anyway). Carbides/silicides are edge cases.
+- Deep-anion diffuseness is genuinely alpha-sensitive (172-292 for N3- over alpha 1.6-2.5) =
+  the inherent environment-dependence the literature (Fowler-Madden, Holka) confirmed. End-to-end
+  nitride (Li3N) crystal validation deferred (needs a QE run); density-level Kirkwood + the
+  general code path (hi_qoff=5) confirm the routes use the -3 refs.
