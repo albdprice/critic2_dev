@@ -34,8 +34,10 @@ molecules and solids (structures, scalar fields, Bader AIM, NCI/ELF, Hirshfeld
 ## Build & test
 
 ```bash
-# build (on dev-srv, out-of-source)
-cd ~/critic2_dev/build && make -j$(nproc) critic2     # or: cmake .. first time
+# build (on dev-srv, out-of-source ON TANK -- dev-srv root / is chronically full,
+# which breaks in-source builds: "Cannot rename module file .smod0"). Binary is
+# symlinked at /usr/local/bin/critic2-dev. Keep ALL large intermediates on /data (tank).
+cd /data/Iterative_hirshfeld/critic2_build && make -j$(nproc) critic2   # cmake ~/critic2_dev first time
 # (deps: gfortran, LAPACK/BLAS, libxc, OpenMP; official docs:
 #  https://aoterodelaroza.github.io/critic2/installation/)
 
