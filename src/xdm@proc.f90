@@ -245,7 +245,7 @@ contains
     ialpharef = 0
     bashi%hi_wfcdir = ""
     bashi%hi_tol = 1d-4
-    bashi%hi_maxit = 60
+    bashi%hi_maxit = 300
 
     ! parse the input and check sanity
     do while(.true.)
