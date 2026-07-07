@@ -273,7 +273,10 @@ contains
     ! to the diffuse references near the cache floor. Without these the bare
     ! grid iteration diverges for ionic systems (e.g. NaCl: Na -> -5).
     real*8, parameter :: hi_beta = 0.2d0   ! gentler mixing: 0.5 fed a soft multi-site
-    ! charge-transfer mode (e.g. Li3N Li1b<->Li2c) that grew dQ instead of damping it
+    ! charge-transfer mode (e.g. Li3N Li1b<->Li2c) that grew dQ instead of damping it.
+    ! FUTURE: linear mixing needs ~215 iters to converge such soft modes; Anderson/DIIS
+    ! (Pulay) mixing on the per-atom charge vector would get there in ~20-30 iters and
+    ! remove the beta sensitivity. Worth doing if the periodic multi-site ionic set grows.
 
     if (.not.s%isinit) call ferror("hirsh_i_driver","system not initialized",faterr)
     if (.not.allocated(s%c)) call ferror("hirsh_i_driver","no crystal",faterr)

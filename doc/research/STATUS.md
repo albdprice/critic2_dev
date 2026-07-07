@@ -46,6 +46,10 @@ Last updated: **2026-06-03**
 4. **[METHOD, med] a1/a2 refit robustness** — MAE-vs-RMSP cross-check (a1→0 boundary);
    validate refit params on an independent set; finish the QE plane-wave refit.
 5. **[CODE, med] Molecular HI-XDM regression test** (#36) — needs shipped wfx/fchk.
+5b. **[CODE, low] Anderson/DIIS mixing for the grid HI-SCF** — linear mixing (β=0.2) now
+   converges soft multi-site charge-transfer modes (e.g. Li3N Li1b↔Li2c) but needs ~215
+   iters; Anderson/Pulay on the per-atom charge vector would do it in ~20–30 and remove the
+   β sensitivity. Do if the periodic multi-site ionic set grows. See notebook 2026-06-03i.
 6. **[RESOLVED 2026-06] Multiply-charged anion references.** O²⁻/S²⁻ done (embedded α + density routes). **N³⁻/P³⁻/As³⁻ and C⁴⁻/Si⁴⁻ now covered** via the Z_eff generator (Heidar-Zadeh, HOMO≈0 zero-EA criterion) → density routes. Deep refs are compact frozen-orbital constructs (env-dependent α; small effect on final energies via vfq cancellation). Investigated:
    the linear-response (Sternheimer) and free-benchmark (Gould) routes cannot give a
    double-anion α (unbound 2nd electron → diverges/diffuse). The **density-based routes
