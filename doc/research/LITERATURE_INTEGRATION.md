@@ -204,3 +204,32 @@ PDFs are at `doc/papers/` and mirrored at `/data/Iterative_hirshfeld/papers/pdf/
 8. **[optional] coverage gaps (#44)** — multiply-charged ions (>+3/<−2), dynamic α(iω)
    two-Lorentzian params, row 6–7 exponents are all absent from the Gould data; gould/scale
    must fall back there (to stern or neutral).
+
+---
+## 5. Double-anion / multiply-charged-anion references (2026-06 literature check)
+
+Verified (deep-research, 14 claims survived 3-0 adversarial verification; synthesis by hand).
+Answers "are we missing a better method for O2-/S2- references?" — **No; our approach is standard-family.**
+
+- **The free double-anion divergence is textbook.** Holka, Urban, Neogrady & Paldus, JCP 141,
+  214303 (2014): free O2-/S2- give "unrealistically high" polarizabilities from RHF instability;
+  a weak harmonic confining potential stabilizes them. O2- is lower-energy than O- only for
+  confinement omega > 0.13 a.u. == exactly our Sternheimer divergence + confinement fix.
+- **Confinement is THE accepted workaround, in three established flavors:** (a) external HO
+  confining potential (Holka 2014, CCSD(T) — the gold-standard O2-/S2- values); (b) Watson-sphere
+  / stabilizing-shell + coupled HF (Fowler & Madden 1985, the canonical in-crystal O2-);
+  (c) frozen neutral-atom potential (Gould-Bucko minimal-chemistry). Our box (3.6*R99) is in this family.
+- **No single transferable O2-/S2- value exists — it is environment-dependent.** In-crystal anion
+  alpha is SUPPRESSED vs free-ion and rises with decreasing coordination / increasing bond length
+  (Fowler-Madden; jp068257s 2007). Reference values to compare against: Holka 2014 (CCSD(T) confined
+  O2-/S2-); Fowler-Tole N3- in Li3N = 36.1/40.1 a.u. ~ 5.35/5.94 A^3.
+- **Implication for us:** (1) the -1 clamp is defensible because in-crystal O2- is pulled DOWN toward
+  the O- value (alpha(O-)~19 a0^3 ~ suppressed in-crystal O2- ~14). (2) The density-moment route
+  (compute / MCLF-style <r3>,<r4>) is a recognized reference-free family; our Kirkwood <r2>^2/N on the
+  confined density belongs to it. (3) Nothing fundamentally better/transferable exists — the accurate
+  values are environment-specific and use the same confinement idea. Method is sound.
+- **For the strictly-best O2-/S2- reference:** cite/compare Holka 2014 (CCSD(T) confined). A future
+  refinement would use the actual IN-CRYSTAL AIM density moments (MCLF-style) rather than a confined
+  free-ion reference, which would capture the environment-dependence automatically.
+
+Provenance: /tmp/claude-.../tasks/wjbtw6evi.output (14 verified claims + sources).

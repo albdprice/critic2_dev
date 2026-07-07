@@ -1508,3 +1508,22 @@ Attempted to extend the table routes (gould/stern) to q=−2 for oxides/sulfides
   that clamp is now justified, not a bug. `batch_sternheimer.py` extended to compute −2 as a
   DIAGNOSTIC only (rstern_m2 emitted for the record, NOT ingested). Provenance:
   `/data/Iterative_hirshfeld/sternheimer_alpha_z84.dat` (full batch incl −2).
+
+### 2026-06-03c — double-anion literature check + MgO end-to-end confirmation
+Two closing pieces on the multiply-charged-anion reference question.
+- **MgO run (QE PBE-PAW rebuilt on /data + critic2 grid):** `compute` route handles O²⁻
+  end-to-end without divergence — Evdw=−0.0129 Ha, C6(O-O)=91.2 a.u. (finite, physically
+  ordered vs neutral 11.3 / stern 45.6 / scale 132.7). Confirms the density route is the
+  correct multiply-charged-anion path in a real crystal. Data /data/Iterative_hirshfeld/mgo_check.
+- **Deep-research literature check (14 claims verified 3-0; cap hit at synthesis, done by hand):**
+  our finding is textbook. Holka/Urban/Neogrady/Paldus JCP 141,214303 (2014): free O²⁻/S²⁻
+  diverge (RHF instability), weak HO confinement fixes it (O²⁻<O⁻ only for ω>0.13 a.u.).
+  Fowler-Madden 1985 (Watson-sphere in-crystal O²⁻, coupled HF); Fowler-Tole N³⁻/Li₃N =
+  5.35/5.94 Å³. In-crystal anion α is environment-dependent + SUPPRESSED vs free ⇒ no
+  transferable constant; the −1 clamp (α(O⁻)~19 a₀³) ≈ physical in-crystal O²⁻ (~14).
+  Confinement (HO / Watson / frozen-neutral) is THE accepted fix; density-moment (MCLF, our
+  Kirkwood) is a recognized reference-free family. Nothing better/transferable missing. New
+  refs in references.bib; synthesis in LITERATURE_INTEGRATION §5.
+GOULD EMBEDDED DATA (for AP): the minimal-chemistry frozen-orbital double-anion α are in the
+ACS SI ASCII files of Gould & Bučko JCTC 12,3603 (2016) doi 10.1021/acs.jctc.6b00361 (NOT in the
+arXiv preprint — that has only the method). Gold-standard O²⁻/S²⁻ values: Holka 2014 CCSD(T).

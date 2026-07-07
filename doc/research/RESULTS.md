@@ -92,6 +92,20 @@ gould/stern deliberately clamp at −1 (documented, justified proxy); **`compute
 the 6-solid results (oxides used the −1 clamp already). Diagnostic:
 `/data/Iterative_hirshfeld/sternheimer_alpha_z84.dat`.
 
+**End-to-end confirmation (MgO, QE PBE-PAW + critic2 grid):** the `compute` route handles
+O (V=73.5 vs Vfree=23.8 a₀³ — strongly anionic) with a finite, physically-ordered result —
+C6(O–O)=91.2 a.u., Evdw=−0.0129 Ha — vs the garbage the Sternheimer −2 would have injected.
+Full: neutral/gould/scale/stern/compute Evdw = −0.0236/−0.0091/−0.0160/−0.0118/−0.0129 Ha;
+C6(O–O) = 11.3/65.4/132.7/45.6/91.2. All finite, no divergence.
+
+**Literature check (2026-06, 14 verified claims — see LITERATURE_INTEGRATION §5):** this is
+textbook. Holka et al. JCP 141, 214303 (2014) — free O²⁻/S²⁻ diverge (RHF instability), a weak
+HO confining potential fixes it (O²⁻<O⁻ only for ω>0.13 a.u.). Fowler–Madden 1985 (Watson-sphere
+in-crystal O²⁻); Fowler–Tole N³⁻ in Li₃N = 5.35/5.94 Å³. In-crystal anion α is environment-
+dependent and SUPPRESSED vs free-ion, so no transferable constant exists and the −1 clamp
+(α(O⁻)≈19 a₀³) sits near the physical in-crystal O²⁻ (~14). Our confinement + density-moment
+approach is standard-family; nothing fundamentally better/transferable is missing.
+
 ## Provenance quick-map
 - R1: `/data/Iterative_hirshfeld/` solid runs (QE + critic2 grid).
 - R2: `/data/Iterative_hirshfeld/gmtkn_molecular/results_*.txt`.
