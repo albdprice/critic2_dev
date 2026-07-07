@@ -1635,3 +1635,14 @@ val+ELF cubes -> critic2 xdm grid (zpsp Li 3 N 5) for neutral/compute/scale/goul
   the KB49 refit. No Li3N reference dispersion to say which is "right" -- but the deep-anion
   refs are EXERCISED and give finite, physical, differentiated results end-to-end. Run persisted
   /data/Iterative_hirshfeld/li3n_check.
+
+### 2026-06-03i — Li3N HI-SCF clean convergence (mixing fix)
+The 06-03h Li3N run hit the 60-iter cap without converging: N was converged (-2.39) but the two
+Li sites (1b vs 2c) traded charge along a soft, near-flat direction; at beta=0.5 the mixing OVERSHOT
+it (dQ grew 2.2e-3->3.4e-3). Fix: grid HI-SCF beta 0.5->0.2 (hirshfeld@proc.f90), maxit 60->300
+(xdm@proc.f90). Li3N now converges in 215 iters (dQ<1e-4): the soft mode resolves once Li1b crawls to
+its natural fully-ionized value (+1.011); Li2c +0.682, N -2.376. Same fixed point as before for
+well-behaved systems (beta only sets the path -> validated solids unchanged). Converged Evdw (Ha):
+neutral -0.0978, gould -0.01846, compute -0.02328, scale -0.03546 -- within 2-5% of the capped values,
+so 06-03h's compute-vs-scale conclusion stands (scale ~52% > compute; both collapse the neutral
+over-estimate via the Li+ alpha ~164->0.6). Committed 2b12cf0d (fix) + docs.
