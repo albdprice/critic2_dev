@@ -1586,3 +1586,29 @@ AP: implement the Z_eff generator to cover -3/-4. DONE for -3, honest limit at -
   the inherent environment-dependence the literature (Fowler-Madden, Holka) confirmed. End-to-end
   nitride (Li3N) crystal validation deferred (needs a QE run); density-level Kirkwood + the
   general code path (hi_qoff=5) confirm the routes use the -3 refs.
+
+### 2026-06-03g — HOMO~0 (zero-EA) criterion: -4 shipped + what deep-anion refs really are
+Implemented the HOMO~0 criterion in gen_anion_rho_zeff.py: scan Z_eff up, take the SMALLEST
+whose SCF converges AND whose HOMO is genuinely bound (e_HOMO <= 0.02 Ry), not merely the
+first that converges (which can be an unbound box-state, HOMO>0, electron pinned at the wall).
+Parses the HOMO eigenvalue from ld1.x. This supersedes the earlier "first-converging" -3 refs.
+- **Now all -3 AND -4 ship on one principled criterion:** n/p/as_q-3, c/si_q-4 (all bound,
+  integrate to N). C4- and N3- (both Ne-shell, 10 e) bind at the SAME Z_eff=9.25, same
+  e_HOMO=-0.099 Ry -- only the cusp-rescale s=Z/Zeff differs. Consistent + reproducible.
+- **KEY PHYSICS the criterion exposed:** the zero-EA frozen-orbital deep anion is COMPACT
+  (marginally-bound, net ~-1 character), NOT more diffuse than the -2 ref. Kirkwood <r2>^2/N:
+  N -1/-2/-3 = 132/138/71; C -2/-4 = 2110/131. It DROPS from -2 to -3/-4. This is NOT a bug:
+  (a) the extra electrons in a -3/-4 free ion are so unbound they only bind marginally (zero-EA
+  at net ~-1), so the frozen-orbital density barely grows; (b) the -1/-2 refs are true-Z
+  BOX-CONFINED (diffuse, box-filling -- C2-=2110 is a box artifact), a DIFFERENT method than the
+  Z_eff frozen-orbital -3/-4, hence a method discontinuity at -2|-3. The "monotonic" earlier -3
+  (Kirk 207) was the box-artifact, less principled.
+- **Does the deep-anion ref choice matter? Little.** In the `compute` route
+  alpha = alpha_free * [<r2>(Q)^2/N(Q)]/[<r2>(0)^2/N(0)] * (vaim/vfq): a more compact ref shrinks
+  the <r2> ratio but shrinks vfq too (larger vaim/vfq), so the two largely cancel. Plus the HI
+  charge rarely reaches full -3/-4 (Madelung caps ~-2.x). So compact-vs-diffuse deep refs move
+  final XDM energies only slightly. Deep-anion alpha is intrinsically environment-dependent
+  (Fowler-Madden) -- there is no single right free value; the zero-EA construct is the principled
+  proxy. A fully method-consistent -1..-4 series would regenerate -1/-2 via Z_eff too (deferred;
+  would perturb validated solid results). Nitrides/phosphides/arsenides/carbides/silicides all
+  now reachable via density routes (compute/scale); gould/stern clamp shallower as before.
