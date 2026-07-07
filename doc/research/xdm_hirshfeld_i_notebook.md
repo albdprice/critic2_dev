@@ -1612,3 +1612,26 @@ Parses the HOMO eigenvalue from ld1.x. This supersedes the earlier "first-conver
   proxy. A fully method-consistent -1..-4 series would regenerate -1/-2 via Z_eff too (deferred;
   would perturb validated solid results). Nitrides/phosphides/arsenides/carbides/silicides all
   now reachable via density routes (compute/scale); gould/stern clamp shallower as before.
+
+### 2026-06-03h — Li3N nitride END-TO-END: compute vs scale (deep N3-)
+Grabbed Li.pbe-s-kjpaw_psl.1.0.0.UPF online (dev-srv has net; matches N psl 1.0.0). QE 7.2
+alpha-Li3N (P6/mmm, 4 atoms, ibrav=4 a=6.894 c/a=1.0622, ecut 80/640, 8^3 k, smearing) ->
+val+ELF cubes -> critic2 xdm grid (zpsp Li 3 N 5) for neutral/compute/scale/gould.
+- **HI-SCF drives N to q=-2.39** (Li +0.955/+0.716) -- genuinely DEEP, interpolates into the
+  -2/-3 references we built. (SCF hit HIMAXIT, max|dQ|~2e-3, N charge stable at -2.39; fine.)
+- alpha_AIM (a0^3):        Evdw(Ha):
+    atom   Q    compute scale gould       neutral -0.0978
+    N   -2.39   34.4   50.1  30.9         gould   -0.0175
+    Li  +0.955   2.09   6.08  0.42        compute -0.0228
+    Li  +0.716  23.0   42.2  14.2         scale   -0.0366
+- **All charge-aware routes collapse the neutral over-estimate** (-0.098 -> -0.017..-0.037):
+  the driver is the Li+ polarizability collapse (free Li ~164 a0^3 -> Li+ 0.4-6), which
+  dominates (3 of 4 atoms). N3- correctly gets MORE polarizable (7.4->30-50). This is exactly
+  the ionic-solid physics: neutral XDM over-counts dispersion by treating Li as a big neutral atom.
+- **compute vs scale:** both bounded/physical; scale is systematically MORE polarizable
+  (N 50 vs 34; Li+ 6.1 vs 2.1) -> scale Evdw ~60% larger than compute (-0.0366 vs -0.0228).
+  scale = aggressive volume-power (V_AIM/V_free)^p'; compute = conservative Kirkwood moments.
+  gould clamps N at -2 and uses tabulated Li+ -> least dispersion. Consistent with scale winning
+  the KB49 refit. No Li3N reference dispersion to say which is "right" -- but the deep-anion
+  refs are EXERCISED and give finite, physical, differentiated results end-to-end. Run persisted
+  /data/Iterative_hirshfeld/li3n_check.
