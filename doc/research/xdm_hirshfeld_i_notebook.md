@@ -1541,3 +1541,23 @@ O 5.40, S 24.1, Cl 30.3, N 8.04). MgO re-run: gould C6(O-O) 65.4->70.9 (+8%, O2-
 proxy, as the literature predicted) but gould is now strictly FI-faithful at -2. stern
 stays -1-clamped (its Sternheimer -2 diverges). Gold-standard cross-check available:
 Holka JCP 141,214303 (2014) CCSD(T) confined O2-/S2-.
+
+### 2026-06-03e — anion coverage audit (whole PT × all oxidation states?)
+Q (AP): do we cover the whole periodic table and all anion oxidation states? Audit:
+COVERAGE BY CHARGE (anions):
+- q=-1: HI densities whole table (117); gould alpha Z=1-85 (73 sp); scale Z<=54; stern Z<=86. ~complete.
+- q=-2: gould embedded alpha 56 species Z<=84 (NOW ingested to Z=84; was truncated at Z=54 -
+  fixed, +26 heavy species Se/Te/Po/Bi + lanthanides); HI densities 20 (p-block main-group only,
+  incl row6 Bi/Pb/Po/Tl); scale via volume Z<=54; stern DIVERGES (not usable).
+- q=-3,-4 (N3-, P3-, C4-...): ZERO coverage anywhere. No density, no gould (Gould stops at -2),
+  stern diverges. Only scale could do it via volume IF a -3 density existed (it doesn't).
+FUNDAMENTAL POINT: you cannot TABULATE a free-ion alpha for -3/-4 - those species are unbound as
+free ions and the divergence worsens with charge (why Gould AND Holka both stop at -2). The
+density/volume-based routes (scale, compute) do NOT need a per-charge free-ion table - they get
+alpha from the actual embedded density/volume (the physically-correct, environment-dependent
+quantity per Fowler-Madden/MCLF). They handle ANY oxidation state, limited only by: compute needs
+the confined -q DENSITY (generatable for -3/-4 via ld1.x box); scale needs p' (Z<=54, extendable
+via Gould's Z^(1/3) formula). PATH TO FULL COVERAGE: (1) generate confined -3/-4 density refs
+(extend batch_anions_ld1.sh: N,P,As at -3; C,Si at -4) - also lets HI reach -3 not clamp at -2;
+(2) route through scale/compute. gould/stern stay capped at -2/-1 (no deeper reference exists).
+Fixed now: alpha_gb_m2 extended Z<=54 -> Z<=84 (full Gould embedded -2 set).
