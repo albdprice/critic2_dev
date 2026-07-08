@@ -264,9 +264,20 @@ contains
     integer, allocatable :: nid(:), lvec(:,:)
     real*8, allocatable :: dist(:), rcutmax(:,:), qflo(:), zval(:)
     real*8, allocatable :: nelec(:), vat(:), qprev(:)
-    real*8 :: x0(3), xdelta(3,3), rho_i, rho_promol, dQ, dQmax, fac, qraw
+    real*8 :: x0(3), xdelta(3,3), rho_i, rho_promol, dQ, dQmax, fac
     real*8 :: rho_lo, rho_hi
-    logical :: converged
+    logical :: converged, useand
+    ! Anderson (Pulay/DIIS) acceleration state for the per-atom charge SCF
+    integer, parameter :: hi_mmax = 6            ! history depth
+    real*8, parameter :: hi_trust = 0.75d0       ! max |step| before linear fallback. Kept
+    ! deliberately tight: Anderson then accelerates only the SMALL-step regime (soft modes /
+    ! near convergence, where it wins big -- Li3N 45 vs 215 iters) and falls back to linear for
+    ! large ionic jumps, where a loose trust let Anderson overshoot past the physical charge and
+    ! break neutrality (MgO -> Mg +3.1 at trust 2.5). Clamp + NaN guard are the hard safety net.
+    real*8, allocatable :: qrawv(:), fk(:), qnew(:)
+    real*8, allocatable :: xhist(:,:), fhist(:,:), dfmat(:,:), dxmat(:,:)
+    real*8, allocatable :: amat(:,:), brhs(:), svals(:), awork(:)
+    integer :: nstore, nhist, jh, irank, info, lwork
     character(len=:), allocatable :: wfcdir
     ! Stabilization (mirrors the mesh path, xdm_wfn / task #34): linear charge
     ! mixing + an element-aware per-iteration anion clamp so the SCF cannot run
@@ -287,6 +298,15 @@ contains
     call hirsh_i_cleanup(bas)
     allocate(bas%hi_qlo(nca), bas%hi_qhi(nca), bas%hi_frac(nca), bas%hi_qfinal(nca))
     allocate(nelec(nca), vat(nca), qprev(nca), qflo(nca), zval(nca))
+    ! Anderson-mixing history + LAPACK least-squares workspace (queried once)
+    allocate(qrawv(nca), fk(nca), qnew(nca))
+    allocate(xhist(nca,hi_mmax+1), fhist(nca,hi_mmax+1))
+    allocate(dfmat(nca,hi_mmax), dxmat(nca,hi_mmax))
+    allocate(amat(nca,hi_mmax), brhs(max(nca,hi_mmax)), svals(hi_mmax))
+    xhist = 0d0; fhist = 0d0; nstore = 0
+    allocate(awork(1)); lwork = -1
+    call dgelss(nca, hi_mmax, 1, amat, nca, brhs, max(nca,hi_mmax), svals, 1d-8, irank, awork, lwork, info)
+    lwork = max(1, nint(awork(1))); deallocate(awork); allocate(awork(lwork))
     bas%hi_qlo = 0
     bas%hi_qhi = 0
     bas%hi_frac = 0d0
@@ -395,25 +415,61 @@ contains
        nelec = nelec * s%c%omega / product(bas%n)
        vat = vat * s%c%omega / product(bas%n)
 
-       ! update per-cellatom Q with linear mixing + element-aware clamp
+       ! ---- update per-cellatom Q: Anderson (Pulay/DIIS) acceleration ----
+       ! Fixed-point map g(q)=zval-N[q]; residual f=g(q)-q. Anderson mixes the last
+       ! hi_mmax (input,residual) pairs so soft multi-site charge-transfer modes (e.g.
+       ! Li3N Li1b<->Li2c) converge in ~tens of iters not hundreds. A trust region +
+       ! a guaranteed linear fallback keep it never worse than plain linear mixing;
+       ! the element-aware clamp (below) is unchanged.
+       do iat = 1, nca
+          qrawv(iat) = zval(iat) - nelec(iat)          ! bare HI update (Q = zval - N)
+       end do
+       fk = qrawv - qprev                              ! residual vector
+
+       ! push (qprev, fk) into the history ring (newest in column 1)
+       if (nstore < hi_mmax+1) nstore = nstore + 1
+       do jh = nstore, 2, -1
+          xhist(:,jh) = xhist(:,jh-1); fhist(:,jh) = fhist(:,jh-1)
+       end do
+       xhist(:,1) = qprev; fhist(:,1) = fk
+
+       useand = .false.
+       nhist = nstore - 1                              ! usable difference count
+       if (nhist >= 1) then
+          do jh = 1, nhist
+             dfmat(:,jh) = fhist(:,1) - fhist(:,jh+1)  ! f_k - f_{k-j}
+             dxmat(:,jh) = xhist(:,1) - xhist(:,jh+1)  ! x_k - x_{k-j}
+          end do
+          amat(1:nca,1:nhist) = dfmat(:,1:nhist)       ! dgelss overwrites A,B
+          brhs(1:nca) = fk
+          call dgelss(nca, nhist, 1, amat, nca, brhs, max(nca,nhist), svals, &
+                      1d-8, irank, awork, lwork, info)
+          if (info == 0 .and. irank >= 1) then
+             qnew = qprev + hi_beta*fk                 ! Anderson combination of past g's
+             do jh = 1, nhist
+                qnew = qnew - brhs(jh) * (dxmat(:,jh) + hi_beta*dfmat(:,jh))
+             end do
+             ! trust region + NaN guard: reject wild/invalid steps -> linear fallback
+             if (all(qnew == qnew) .and. maxval(abs(qnew - qprev)) <= hi_trust) &
+                useand = .true.
+          end if
+       end if
+       if (.not.useand) qnew = qprev + hi_beta*fk      ! warmup / safe fallback
+
+       ! element-aware clamp to [qflo, iz-1d-3] + bookkeeping (unchanged). The floor
+       ! stops Q escaping to the diffuse references near the cache floor; the cation
+       ! side is bounded by the bare nucleus. Convergence is on the CHANGE OF STATE.
        dQmax = 0d0
        do iat = 1, nca
           iz = s%c%spc(s%c%atcel(iat)%is)%z
-          qraw = zval(iat) - nelec(iat)                ! bare HI update (Q = zval - N)
-          ! damp, then clamp to [qflo, iz-1d-3]: the element-dependent anion
-          ! floor stops Q escaping to the diffuse/best-effort references near
-          ! the cache floor; the cation side is bounded by the bare nucleus.
-          bas%hi_qfinal(iat) = qprev(iat) + hi_beta * (qraw - qprev(iat))
-          if (bas%hi_qfinal(iat) < qflo(iat)) bas%hi_qfinal(iat) = qflo(iat)
-          if (bas%hi_qfinal(iat) > dble(iz) - 1d-3) bas%hi_qfinal(iat) = dble(iz) - 1d-3
-          ! convergence is on the CHANGE OF STATE (so an atom pinned at a clamp,
-          ! which is stable but whose raw residual stays nonzero, counts as
-          ! converged rather than falsely flagging non-convergence).
-          dQ = abs(bas%hi_qfinal(iat) - qprev(iat))
+          if (qnew(iat) < qflo(iat)) qnew(iat) = qflo(iat)
+          if (qnew(iat) > dble(iz) - 1d-3) qnew(iat) = dble(iz) - 1d-3
+          bas%hi_qfinal(iat) = qnew(iat)
+          dQ = abs(qnew(iat) - qprev(iat))
           if (dQ > dQmax) dQmax = dQ
-          bas%hi_qlo(iat) = floor(bas%hi_qfinal(iat))
+          bas%hi_qlo(iat) = floor(qnew(iat))
           bas%hi_qhi(iat) = bas%hi_qlo(iat) + 1
-          bas%hi_frac(iat) = bas%hi_qfinal(iat) - dble(bas%hi_qlo(iat))
+          bas%hi_frac(iat) = qnew(iat) - dble(bas%hi_qlo(iat))
        end do
 
        ! status line
