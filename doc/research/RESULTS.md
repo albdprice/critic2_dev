@@ -112,12 +112,13 @@ approach is standard-family; nothing fundamentally better/transferable is missin
 - R3: `/data/Iterative_hirshfeld/kb49_psi4/fit_results.json`.
 - R4: `param.F90` arrays + notebook §m–§30s.
 
-## R6 — Li3N nitride (periodic, N at q=-2.38; deep-anion refs exercised) [HI-SCF CONVERGED]
-QE PBE alpha-Li3N -> critic2 xdm grid, zpsp Li 3 N 5. HI-SCF converged in 215 iters (beta 0.2,
-dQ<1e-4); charges N -2.376, Li(1b) +1.011, Li(2c) +0.682 (Li1b fully ionized). Converged Evdw (Ha):
-neutral -0.0978, gould -0.01846, compute -0.02328, scale -0.03546. alpha(N3-)=34(compute)/50(scale)/
-31(gould) a0^3; alpha(Li1b+)=0.58, alpha(Li2c)=27 (compute). Charge-aware collapses the neutral
-over-estimate (driven by Li+ alpha ~164->0.6); scale ~52% more dispersion than compute (aggressive
-volume-power vs conservative Kirkwood moments); gould least (clamps N at -2). First end-to-end use of
-the Z_eff/HOMO~0 deep-anion (-3) references in a real crystal. NB partial (beta 0.5, 60-iter-capped)
-values differed only 2-5%, so the earlier comparison was robust.
+## R6 — Li3N nitride (periodic, N at q=-2.40; deep-anion refs) [Anderson HI-SCF, TRUE fixed point]
+QE PBE alpha-Li3N -> critic2 xdm grid, zpsp Li 3 N 5. Anderson/DIIS HI-SCF converges in 45 iters
+to a TIGHT fixed point (dQ~3e-5): charges N -2.396, Li(1b) +0.673, Li(2c) +0.862 (all Li <1,
+physical). Evdw (Ha): neutral -0.0978, gould -0.01744, compute -0.02274, scale -0.03711.
+alpha(N)=34(compute)/50(scale)/31(gould) a0^3. Charge-aware collapses the neutral over-estimate
+(Li+ alpha ~164 -> ~0.6); scale ~63% more dispersion than compute (aggressive volume-power vs
+conservative Kirkwood moments); gould least (clamps N at -2). NB the earlier LINEAR-mixing run
+stopped prematurely at Li1b=1.011 (>1) / Evdw compute -0.02328 -- Anderson exposed it as a
+non-fixed-point; the corrected values shift 2-6% but the compute>scale>gould ordering is unchanged.
+First end-to-end use of the Z_eff/HOMO~0 deep-anion (-3) refs in a real crystal.

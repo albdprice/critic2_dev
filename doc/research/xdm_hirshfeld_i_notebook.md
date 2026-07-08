@@ -1646,3 +1646,17 @@ well-behaved systems (beta only sets the path -> validated solids unchanged). Co
 neutral -0.0978, gould -0.01846, compute -0.02328, scale -0.03546 -- within 2-5% of the capped values,
 so 06-03h's compute-vs-scale conclusion stands (scale ~52% > compute; both collapse the neutral
 over-estimate via the Li+ alpha ~164->0.6). Committed 2b12cf0d (fix) + docs.
+
+### 2026-06-03j — Anderson/DIIS mixing for the grid HI-SCF (+ exposes premature linear convergence)
+Implemented Anderson/Pulay acceleration on the per-atom charge vector (LAPACK dgelss LS over the
+last hi_mmax=6 residuals), tight trust region 0.75 + physical clamp + NaN guard = guaranteed linear
+fallback. Committed ee06a89e. Li3N: 45 iters (was 215 linear). MgO: Mg +2.000/O -2.000 (neutral,
+unchanged). Trust matters: at 2.5 Anderson overshot MgO to Mg +3.1 (broke neutrality, sum=+1.1) --
+0.75 keeps Anderson to the small-step soft-mode regime (where it wins) and falls back to linear for
+big ionic jumps. **KEY:** Anderson converged Li3N to a TIGHT true fixed point (N -2.396, Li 0.673/
+0.862, dQ 3e-5) whereas linear mixing had "converged" (dQ<1e-4) at Li1b=1.011 (>1, unphysical) --
+i.e. the linear result was PREMATURE (residual ~5e-4, still crawling). Corrected Li3N Evdw: compute
+-0.02274, scale -0.03711, gould -0.01744 (2-6% off the linear values; ordering unchanged). ACTION:
+the 6 validated solids (R1-R5, computed with linear beta=0.5/tol-1e-4) should be re-run through the
+Anderson solver to confirm they weren't similarly premature -- MgO already confirmed identical
+(+2/-2, clamped), the simple binaries are likely fine, but multi-site ones need a spot check.
