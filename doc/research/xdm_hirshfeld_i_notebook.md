@@ -1660,3 +1660,16 @@ i.e. the linear result was PREMATURE (residual ~5e-4, still crawling). Corrected
 the 6 validated solids (R1-R5, computed with linear beta=0.5/tol-1e-4) should be re-run through the
 Anderson solver to confirm they weren't similarly premature -- MgO already confirmed identical
 (+2/-2, clamped), the simple binaries are likely fine, but multi-site ones need a spot check.
+
+### 2026-07-08 — CLUSTER CAMPAIGN: KB49 a1/a2 refit on nibi (3 functionals, Psi4/mesh arm done)
+HANDOFF: run `bash /tank/research/xdm_chargeaware/handoff.sh`; docs in /tank/research/xdm_chargeaware/.
+Moved the refit to nibi as parallel SLURM arrays (fix: pilot was serial; 147 species independent).
+- Molecular XDM is MESH-ONLY in critic2 (cube rejected) -> Psi4(SCF)->critic2 mesh. Periodic=QE->grid.
+- Psi4/mesh KB49 refit DONE for B86bPBE, B3LYP, PBE0 x5 options; validated 1e-10 via AP energy_bj +
+  kb49.din. B3LYP best functional (neutral RMSE 0.434 kcal/mol). On near-neutral KB49 charge-aware ~=
+  neutral (scale marginally best for B86bPBE/PBE0) -> payoff expected on IONIC targets, not KB49. Full
+  a1/a2 table in /tank/research/xdm_chargeaware/CAMPAIGN.md.
+- Generated B86b PAW pseudos (pslibrary+ld1.x, gfun=b86bpbe) for the QE arm; QE/grid arm ~80% (finishing).
+- Gotchas: nibi needs `srun` for ld1.x/QE (login-node MPI_Init hang); Psi4(gcc12)/critic2(gcc13) two-phase
+  module loads; xdm chf keyword must match functional (pbe/b3lyp/pbe0).
+NEXT: finish QE arm + QE fit; then run ionic solids + X23 with refitted a1/a2 (all 5 options) = headline.
