@@ -684,6 +684,21 @@ contains
                       pdh = max(phi_hi(i,j,k),1d-14)
                    end if
 
+                   ! Skip grid points where the (HI) promolecular denominator is
+                   ! below the reliability floor ecut. There the physical density
+                   ! is negligible, but flooring pdh at 1d-14 while the diffuse
+                   ! (anion) charge-aware reference rhofree_h stays O(1) makes the
+                   ! Hirshfeld weight rhofree_h/pdh exceed unity and blow up, then
+                   ! r^3-amplified in the volume -> spurious divergence in
+                   ! vacuum/low-density regions (molecule-in-box, surfaces/slabs,
+                   ! voids). Dense bulk has no such points, so this is bit-identical
+                   ! there; it only rescues the low-density regime.
+                   if (dohi) then
+                      if (phi_hi(i,j,k) < ecut) cycle
+                   else
+                      if (sy%f(ipdens)%grid%f(i,j,k) < ecut) cycle
+                   end if
+
                    ! exchange-hole moments: HI weights only if requested (MOMENTS)
                    if (himoments) then
                       wei = rhofree_h * rhot / pdh
