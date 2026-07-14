@@ -1673,3 +1673,19 @@ Moved the refit to nibi as parallel SLURM arrays (fix: pilot was serial; 147 spe
 - Gotchas: nibi needs `srun` for ld1.x/QE (login-node MPI_Init hang); Psi4(gcc12)/critic2(gcc13) two-phase
   module loads; xdm chf keyword must match functional (pbe/b3lyp/pbe0).
 NEXT: finish QE arm + QE fit; then run ionic solids + X23 with refitted a1/a2 (all 5 options) = headline.
+
+## 2026-07-14 — Grid charge-aware vacuum α divergence: diagnosed + fixed (42260ea4)
+
+While building the QE/grid KB49 a1/a2 fit (engine-specific damping is required — QE-grid
+coefficients differ from Psi4-mesh; only FHI-aims shares one grid for molecules+solids), two
+grid-path issues surfaced on molecule-in-box species:
+
+1. Neutral cross-check gap (~2%) = critic2's periodic image sum over the (too-small, 20-bohr)
+   box. Canonical XDM+QE uses a box large enough that images don't interact -> bumped
+   qe_species.py to >=30-bohr boxes (refdata convention); 30-bohr neutral pilot in flight.
+
+2. Charge-aware routes diverged (maxC6~1e11): weight rhofree_h/pdh with pdh floored at 1d-14
+   blows up in vacuum where the diffuse anion reference stays O(1); r^3-amplified in avol.
+   FIX: skip grid points with (HI) promol < ecut=1d-11. Verified hf_hf_1 1.5e11->34.1 a.u.;
+   MgO isolated HEAD-vs-parent diff ~1e-10 (dense solids bit-identical). This is the
+   prerequisite for charge-aware grid XDM on surfaces/slabs and voids, not just KB49.
