@@ -232,4 +232,4 @@ Answers "are we missing a better method for O2-/S2- references?" — **No; our a
   refinement would use the actual IN-CRYSTAL AIM density moments (MCLF-style) rather than a confined
   free-ion reference, which would capture the environment-dependence automatically.
 
-Provenance: /tmp/claude-.../tasks/wjbtw6evi.output (14 verified claims + sources).
+Provenance: literature survey, 14 verified claims + sources (see notebook).
