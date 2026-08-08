@@ -157,6 +157,8 @@ contains
                 ialpharef = 3   ! Stage 2C: Kirkwood-type moment estimator from confined ld1.x ions
              elseif (equal(word,"stern").or.equal(word,"sternheimer")) then
                 ialpharef = 4   ! Stage 2C-rigorous: confined-ion Sternheimer ratios
+             elseif (equal(word,"sternws").or.equal(word,"watson")) then
+                ialpharef = 5   ! Stage 2D: Watson-sphere self-consistent Sternheimer (deep anions)
              else
                 call ferror("xdm_driver","unknown ALPHAREF mode: "//word,faterr,line,syntax=.true.)
              end if
@@ -351,6 +353,8 @@ contains
              ialpharef = 3
           elseif (equal(word,"stern").or.equal(word,"sternheimer")) then
              ialpharef = 4
+          elseif (equal(word,"sternws").or.equal(word,"watson")) then
+             ialpharef = 5   ! Stage 2D: Watson-sphere self-consistent Sternheimer (deep anions)
           else
              call ferror("xdm_driver","unknown ALPHAREF mode: "//word,faterr,line,syntax=.true.)
              return
@@ -651,7 +655,7 @@ contains
        ! Stage 2 (periodic): load the charge-matched reference cache so
        ! chargeaware_atpol can integrate hirsh_i_refrho for the converged HI
        ! charges (routes 1/3; route 2 needs no cache).
-       if (ialpharef == 1 .or. ialpharef == 3 .or. ialpharef == 4) &
+       if (ialpharef == 1 .or. ialpharef == 3 .or. ialpharef == 4 .or. ialpharef == 5) &
           call hirsh_i_prepare(sy,bashi%hi_qfinal,bashi%hi_wfcdir)
     end if
 
@@ -776,7 +780,7 @@ contains
        end if
     end do
     deallocate(ityp)
-    if (ialpharef == 1 .or. ialpharef == 3 .or. ialpharef == 4) call hirsh_i_cache_clean()
+    if (ialpharef == 1 .or. ialpharef == 3 .or. ialpharef == 4 .or. ialpharef == 5) call hirsh_i_cache_clean()
 
     ! report charge-aware polarizabilities (periodic Stage 2)
     if (dohi .and. ialpharef > 0) then
@@ -785,6 +789,7 @@ contains
        case (2); write (uout,'("+ Stage 2B (ALPHAREF SCALE): charge-aware polarizabilities (a0^3)")')
        case (3); write (uout,'("+ Stage 2C (ALPHAREF COMPUTE): charge-aware polarizabilities (a0^3)")')
        case (4); write (uout,'("+ Stage 2C (ALPHAREF STERN): charge-aware polarizabilities (a0^3)")')
+       case (5); write (uout,'("+ Stage 2D (ALPHAREF STERNWS): Watson-sphere charge-aware polarizabilities (a0^3)")')
        end select
        write (uout,'("# i At      Q             V_AIM         a_neutscal    alpha_AIM")')
        do i = 1, sy%c%nneq
@@ -1662,7 +1667,7 @@ contains
        ! Gould-Bucko ion polarizability (ion_alpha0, linear-in-N interp) and
        ! V_free(Q) the charge-matched reference volume. This is the physical
        ! pairing the volume-only VOLREF lacks.
-       if (lvolref .or. lalpharef == 1 .or. lalpharef == 3 .or. lalpharef == 4) then
+       if (lvolref .or. lalpharef == 1 .or. lalpharef == 3 .or. lalpharef == 4 .or. lalpharef == 5) then
           call hirsh_i_prepare(sy,qcel,wfcdir)
           if (lvolref) then
              write (uout,'("+ Stage 1 (VOLREF): charge-matched reference volumes")')
@@ -1675,6 +1680,10 @@ contains
           if (lalpharef == 4) then
              write (uout,'("+ Stage 2C (ALPHAREF STERN): confined-ion Sternheimer polarizabilities (a0^3)")')
              write (uout,'("# i At      Q             a_neutscal    a_stern(Q)    alpha_AIM")')
+          end if
+          if (lalpharef == 5) then
+             write (uout,'("+ Stage 2D (ALPHAREF STERNWS): Watson-sphere Sternheimer polarizabilities (a0^3)")')
+             write (uout,'("# i At      Q             a_neutscal    a_wats(Q)     alpha_AIM")')
           end if
           if (lalpharef == 3) then
              write (uout,'("+ Stage 2C (ALPHAREF COMPUTE): Kirkwood moment estimator from confined ions (a0^3)")')
@@ -1720,6 +1729,14 @@ contains
                 afi = ion_alpha_stern(iz,qcel(i))
                 if (afi > 0d0 .and. vfq > 1d-30) then
                    atpolov(i) = afi * v(i) / vfq          ! alpha_stern(Q) * V_AIM / V_free(Q)
+                   write (uout,'(I3,X,A,X,1p,4(E13.6,X))') i, string(nameguess(iz,.true.)), &
+                      qcel(i), apol0, afi, atpolov(i)
+                end if
+             end if
+             if (lalpharef == 5) then
+                afi = ion_alpha_sternws(iz,qcel(i))       ! Watson-sphere Sternheimer (deep anions)
+                if (afi > 0d0 .and. vfq > 1d-30) then
+                   atpolov(i) = afi * v(i) / vfq          ! alpha_wats(Q) * V_AIM / V_free(Q)
                    write (uout,'(I3,X,A,X,1p,4(E13.6,X))') i, string(nameguess(iz,.true.)), &
                       qcel(i), apol0, afi, atpolov(i)
                 end if
@@ -2326,6 +2343,42 @@ contains
     a = alpha_free(iz) * ratio
   end function ion_alpha_stern
 
+  !> Watson-sphere charge-aware ion polarizability (a0^3). Cations/neutral are
+  !> bound so they reuse the plain confined-Sternheimer ratios (rstern_p1/p2);
+  !> anions q<0 use the self-consistent WATSON-SPHERE Sternheimer ratios
+  !> rstern_ws_m{1,2,3}, which stay finite and match Tessman in-crystal alpha for
+  !> the deep anions (O2- 1.5, S2- 4.8 A^3) where the free double anion diverges.
+  !> Ratios generated by tools/wfc_generator/gen_ion_alpha_watson_scf.py (a
+  !> self-consistent radial KS atom with a Watson sphere of radius R_W=<r^3>^1/3
+  !> of the neutral). q clamped to [-3,+2]; rstern_ws=1 => neutral fallback.
+  function ion_alpha_sternws(iz,q) result(a)
+    use param, only: alpha_free, rstern_p1, rstern_p2, rstern_ws_m1, rstern_ws_m2,&
+       rstern_ws_m3, maxzat0
+    integer, intent(in) :: iz
+    real*8, intent(in) :: q
+    real*8 :: a, qc, ratio, f
+    a = 0d0
+    if (iz < 1 .or. iz > maxzat0) return
+    if (q >= 0d0) then
+       qc = min(q,2d0)
+       if (qc >= 1d0) then
+          f = qc - 1d0; ratio = (1d0-f)*rstern_p1(iz) + f*rstern_p2(iz)
+       else
+          f = qc; ratio = (1d0-f) + f*rstern_p1(iz)
+       end if
+    else
+       qc = max(q,-3d0)
+       if (qc >= -1d0) then
+          f = -qc;         ratio = (1d0-f) + f*rstern_ws_m1(iz)
+       else if (qc >= -2d0) then
+          f = -qc - 1d0;   ratio = (1d0-f)*rstern_ws_m1(iz) + f*rstern_ws_m2(iz)
+       else
+          f = -qc - 2d0;   ratio = (1d0-f)*rstern_ws_m2(iz) + f*rstern_ws_m3(iz)
+       end if
+    end if
+    a = alpha_free(iz) * ratio
+  end function ion_alpha_sternws
+
   !> Charge-aware atomic polarizability (a0^3) for the Stage-2 routes, shared
   !> by the molecular (xdm_wfn) and periodic (xdm_grid) paths so both use
   !> identical formulas. iz = atomic number, qreal = HI charge, vaim = HI
@@ -2384,6 +2437,9 @@ contains
        if (afi > 0d0 .and. vfree0 > 1d-30) atpol = afi * vaim / vfree0
     elseif (ialpha == 4) then
        afi = ion_alpha_stern(iz,qreal)            ! our confined-ion Sternheimer ratios
+       if (afi > 0d0) atpol = afi * vaim / vfq
+    elseif (ialpha == 5) then
+       afi = ion_alpha_sternws(iz,qreal)          ! Watson-sphere Sternheimer (deep anions)
        if (afi > 0d0) atpol = afi * vaim / vfq
     elseif (ialpha == 3) then
        if (r20 > 1d-30 .and. n0 > 1d-30 .and. nq > 1d-30) then
