@@ -53,7 +53,7 @@ for Z in range(1, ZMAX + 1):
         print(f"# {sym} q0 FAILED: {msg}", file=sys.stderr); continue
     a0[Z] = a
     rows.append((Z, sym, 0, a, rmax, 1.0))
-    for q in (+1, -1, -2):
+    for q in (+1, +2, -1, -2):
         aq, ok, msg = g.compute_alpha(sym, q, rmax)
         if not ok:
             print(f"# {sym} q{q:+d} FAILED: {msg}", file=sys.stderr); continue
@@ -75,9 +75,10 @@ print(f"\nwrote {OUT}", file=sys.stderr)
 # Fortran arrays (default ratio 1.0 = no charge correction).
 # rstern_m2 falls back to the -1 ratio where no bound -2 datum exists, so that
 # ion_alpha_stern interpolating -1 -> -2 degrades to the (correct) -1 clamp there.
-rp1 = [1.0]*(ZMAX+1); rm1 = [1.0]*(ZMAX+1); m2 = {}
+rp1 = [1.0]*(ZMAX+1); rp2 = [1.0]*(ZMAX+1); rm1 = [1.0]*(ZMAX+1); m2 = {}
 for (Z, sym, q, a, rmax, rt) in rows:
     if q == 1: rp1[Z] = rt
+    elif q == 2: rp2[Z] = rt
     elif q == -1: rm1[Z] = rt
     elif q == -2: m2[Z] = rt
 rm2 = list(rm1)
@@ -92,6 +93,8 @@ def emit(name, arr):
     return f"  real*8, parameter :: {name}(1:maxzat0) = (/&\n{s}\n"
 with open("/tmp/stern/sternheimer_fortran.txt", "w") as f:
     f.write(emit("rstern_p1", rp1))
+    f.write("\n")
+    f.write(emit("rstern_p2", rp2))
     f.write("\n")
     f.write(emit("rstern_m1", rm1))
     f.write("\n")

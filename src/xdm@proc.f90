@@ -2296,7 +2296,7 @@ contains
   !> the bracketing integer charge states (rstern(0)=1). The uncoupled
   !> absolute overestimate cancels in the ratio. q clamped to [-1,+1].
   function ion_alpha_stern(iz,q) result(a)
-    use param, only: alpha_free, rstern_p1, rstern_m1, maxzat0
+    use param, only: alpha_free, rstern_p1, rstern_p2, rstern_m1, maxzat0
     integer, intent(in) :: iz
     real*8, intent(in) :: q
     real*8 :: a, qc, ratio, f
@@ -2311,8 +2311,14 @@ contains
     ! ~14 a0^3). For genuine |q|>1 anions use the DENSITY-based routes
     ! (alpharef compute / scale), which use the bound confined ground-state
     ! density (well-defined, unlike the linear response) and handle any charge.
-    qc = min(max(q,-1d0),1d0)
-    if (qc >= 0d0) then
+    ! Positive charge now extends to +2 (rstern_p2, cations bound => Sternheimer OK).
+    ! Negative side still clamped at -1: free double-anions are unbound => linear
+    ! response diverges; -2/-3 anions are handled by the density routes (alpharef
+    ! compute/scale) which use the box-confined bound ground-state density.
+    qc = min(max(q,-1d0),2d0)
+    if (qc >= 1d0) then
+       f = qc - 1d0; ratio = (1d0-f)*rstern_p1(iz) + f*rstern_p2(iz)
+    else if (qc >= 0d0) then
        f = qc;  ratio = (1d0-f) + f*rstern_p1(iz)
     else
        f = -qc; ratio = (1d0-f) + f*rstern_m1(iz)
