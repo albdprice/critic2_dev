@@ -112,7 +112,11 @@ def scf(Z, occ, Rw, qnet, rmax=25.0, npts=3500, beta=0.3, tol=1e-6, maxit=300, w
             if dn < tol: V = (1-beta)*V + beta*Vnew; break
         V = (1-beta)*V + beta*Vnew
         nold = sigma
-    return r, V, orb, occ
+    # sigma(r) = sum occ u^2 = 4 pi r^2 n(r); r^3-moment free volume V = int n r^3 d3r
+    sigma = np.zeros_like(r)
+    for (n,l),o in occ.items():
+        if (n,l) in orb: sigma += o*orb[(n,l)][1]**2
+    return r, V, orb, occ, sigma
 
 def solve_inhom(r, h, rhs, lp, V, eps):
     """Solve [-1/2 d2/dr2 + lp(lp+1)/(2r^2) + V - eps] w = rhs on the uniform
@@ -147,12 +151,13 @@ def alpha_from(r, V, orb, occ):
 
 def compute(sym, q, wfcdir, rmax=25.0, npts=3500, watson=True):
     Z = G.ELEM.index(sym); N = Z - q
-    if N < 1 or N > len(G._CONF): return None, f"unsupported N={N}", None
+    if N < 1 or N > len(G._CONF): return None, f"unsupported N={N}", None, None
     from gen_ion_alpha_watson import rmoment_neutral
     Rw = rmoment_neutral(sym, wfcdir, p=3)
     occ = parse_config(G._CONF[N-1])
-    r, V, orb, occ = scf(Z, occ, Rw, qnet=q, rmax=rmax, npts=npts, watson=watson)
-    return alpha_from(r, V, orb, occ), G._CONF[N-1], Rw
+    r, V, orb, occ, sigma = scf(Z, occ, Rw, qnet=q, rmax=rmax, npts=npts, watson=watson)
+    vws = float(np.trapezoid(sigma * r**3, r))   # int n(r) r^3 d3r of the Watson-confined ion
+    return alpha_from(r, V, orb, occ), G._CONF[N-1], Rw, vws
 
 def bare_hydrogen(npts=6000, rmax=60.0):
     r = np.linspace(rmax/npts, rmax, npts); h = r[1]-r[0]
@@ -176,12 +181,12 @@ def main():
         return
     if a.gridscan:
         for rmax in (18,22,26,30):
-            al,_,Rw = compute(a.symbol, a.charge, a.wfcdir, rmax=rmax, npts=int(rmax*140),
+            al,_,Rw,_ = compute(a.symbol, a.charge, a.wfcdir, rmax=rmax, npts=int(rmax*140),
                               watson=not a.no_watson)
             print(f"  rmax={rmax}  R_W={Rw:.3f}  alpha={al:.4f} a0^3")
         return
-    al, conf, Rw = compute(a.symbol, a.charge, a.wfcdir, a.rmax, a.npts, watson=not a.no_watson)
-    print(f"{a.symbol} q{a.charge:+d}  R_W={Rw:.3f}  alpha(0)={al:.4f} a0^3  [{conf}]")
+    al, conf, Rw, vws = compute(a.symbol, a.charge, a.wfcdir, a.rmax, a.npts, watson=not a.no_watson)
+    print(f"{a.symbol} q{a.charge:+d}  R_W={Rw:.3f}  alpha(0)={al:.4f} a0^3  V_ws={vws:.3f}  [{conf}]")
 
 if __name__ == "__main__":
     main()

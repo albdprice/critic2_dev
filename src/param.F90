@@ -461,82 +461,83 @@ real*8, parameter :: rstern_p1(1:maxzat0) = (/&
       1d0, 1d0, 1d0, 1d0, 1d0, 1d0,&
       1d0, 1d0, 1d0, 1d0, 1d0, 1d0,&
       1d0, 1d0, 1d0 /)
-  ! rstern_ws_m{1,2,3}: Watson-sphere self-consistent Sternheimer anion ratios
-  ! alpha_ws(Z,-N)/alpha_ws(Z,0), N=1,2,3. Generated 2026-08 by
-  ! tools/wfc_generator/{gen_ion_alpha_watson_scf,batch_watson}.py -- a self-consistent
-  ! radial KS(LDA) atom with a Watson sphere of radius R_W=<r^3>^(1/3)(neutral); the
-  ! sphere binds the deep anion so the response stays FINITE (unlike free O2-/S2-).
-  ! Validated: O2- 10.24 a0^3=1.52 A^3 vs Tessman(MgO) 1.65; S2- 32.3=4.78 vs 4.8-5.9.
-  ! Unphysical over-fills (F2-, S3-, ...) are 1d0 => critic2 falls back to neutral scaling.
-  ! Used by ion_alpha_sternws (alpharef sternws); cations reuse rstern_p1/p2.
-  real*8, parameter :: rstern_ws_m1(1:maxzat0) = (/&
-      2.9433d0, 1d0, 1.4892d0, 0.39393d0, 1.7156d0, 1.4875d0,&
-      1.4064d0, 1.3581d0, 1.3233d0, 1d0, 0.98641d0, 0.55797d0,&
-      1.1439d0, 1.0651d0, 1.0624d0, 1.0668d0, 1.0703d0, 1d0,&
-      0.97616d0, 1.0309d0, 0.9844d0, 0.97065d0, 1.0675d0, 1.0028d0,&
-      0.95519d0, 0.95243d0, 0.95018d0, 0.85333d0, 1.1056d0, 0.7227d0,&
-      0.97132d0, 0.92212d0, 0.93336d0, 0.94954d0, 0.96379d0, 1d0,&
-      1.0104d0, 0.90348d0, 0.88065d0, 0.819d0, 0.87552d0, 1.1067d0,&
-      0.7625d0, 0.93978d0, 0.48487d0, 1.9874d0, 1.2262d0, 0.61906d0,&
-      1.0833d0, 0.96996d0, 0.95339d0, 0.95436d0, 0.95951d0, 1d0,&
-      1d0, 1d0, 1d0, 1d0, 1d0, 1d0,&
-      1d0, 1d0, 1d0, 1d0, 1d0, 1d0,&
-      1d0, 1d0, 1d0, 1d0, 1d0, 1d0,&
-      1d0, 1d0, 1d0, 1d0, 1d0, 1d0,&
-      1d0, 1d0, 1d0, 1d0, 1d0, 1d0,&
-      1d0, 1d0, 1d0, 1d0, 1d0, 1d0,&
-      1d0, 1d0, 1d0, 1d0, 1d0, 1d0,&
-      1d0, 1d0, 1d0, 1d0, 1d0, 1d0,&
-      1d0, 1d0, 1d0, 1d0, 1d0, 1d0,&
-      1d0, 1d0, 1d0, 1d0, 1d0, 1d0,&
-      1d0, 1d0, 1d0, 1d0, 1d0, 1d0,&
-      1d0, 1d0, 1d0 /)
+  ! aws_m{1,2,3}: RAW Watson-sphere self-consistent Sternheimer anion polarizabilities
+  ! alpha_ws(Z,-N) in a0^3 (N=1,2,3), NOT ratios. Generated 2026-08 by
+  ! tools/wfc_generator/{gen_ion_alpha_watson_scf,batch_watson}.py -- a self-consistent radial
+  ! KS(LDA) atom with a Watson sphere R_W=<r^3>^(1/3)(neutral) inside the SCF, then Pauli-projected
+  ! uncoupled Sternheimer. Used DIRECTLY (not renormalized to alpha_free) by ion_alpha_sternws for
+  ! anions: the raw value already matches Tessman in-crystal (O2- 10.24 a0^3=1.52 A^3 vs 1.65;
+  ! S2- 32.27=4.78 vs 4.8-5.9); the alpha_free renorm (used for cations) is NOT charge-transferable
+  ! across shell-filling and would pull the deep anion below experiment. 0d0 = unphysical over-fill
+  ! (F2-, S3-, Kr-: electron in the next shell) => ion_alpha_sternws falls back to neutral alpha_free.
+  real*8, parameter :: aws_m1(1:maxzat0) = (/&
+      22.298d0, 0d0, 275.8d0, 31.756d0, 25.491d0, 17.193d0,&
+      11.707d0, 8.2453d0, 6.0071d0, 0d0, 171.93d0, 68.363d0,&
+      64.074d0, 50.483d0, 38.948d0, 30.304d0, 23.935d0, 0d0,&
+      320.76d0, 287.99d0, 220.04d0, 179.14d0, 167.07d0, 128.84d0,&
+      113.13d0, 99.869d0, 88.969d0, 71.863d0, 71.787d0, 50.103d0,&
+      50.971d0, 46.051d0, 40.31d0, 35.063d0, 30.551d0, 0d0,&
+      392.16d0, 325.95d0, 265.57d0, 201.06d0, 164.05d0, 170.3d0,&
+      122.61d0, 109.25d0, 50.617d0, 91.057d0, 107.34d0, 64.329d0,&
+      68.537d0, 65.034d0, 59.762d0, 54.383d0, 49.384d0, 0d0,&
+      0d0, 0d0, 0d0, 0d0, 0d0, 0d0,&
+      0d0, 0d0, 0d0, 0d0, 0d0, 0d0,&
+      0d0, 0d0, 0d0, 0d0, 0d0, 0d0,&
+      0d0, 0d0, 0d0, 0d0, 0d0, 0d0,&
+      0d0, 0d0, 0d0, 0d0, 0d0, 0d0,&
+      0d0, 0d0, 0d0, 0d0, 0d0, 0d0,&
+      0d0, 0d0, 0d0, 0d0, 0d0, 0d0,&
+      0d0, 0d0, 0d0, 0d0, 0d0, 0d0,&
+      0d0, 0d0, 0d0, 0d0, 0d0, 0d0,&
+      0d0, 0d0, 0d0, 0d0, 0d0, 0d0,&
+      0d0, 0d0, 0d0, 0d0, 0d0, 0d0,&
+      0d0, 0d0, 0d0 /)
 
-  real*8, parameter :: rstern_ws_m2(1:maxzat0) = (/&
-      1d0, 1d0, 0.39976d0, 0.5886d0, 2.2851d0, 1.9095d0,&
-      1.7712d0, 1.6875d0, 1d0, 1d0, 0.49842d0, 0.64358d0,&
-      1.2333d0, 1.1338d0, 1.1299d0, 1.1358d0, 1d0, 1d0,&
-      1.1327d0, 1.033d0, 0.98477d0, 1.2101d0, 0.95026d0, 0.97384d0,&
-      0.9326d0, 0.92626d0, 0.89303d0, 0.9164d0, 0.73905d0, 0.72645d0,&
-      0.91514d0, 0.87151d0, 0.89297d0, 0.91944d0, 1d0, 1d0,&
-      0.89677d0, 0.79541d0, 0.71247d0, 0.71842d0, 0.9679d0, 0.84332d0,&
-      0.71645d0, 0.47718d0, 0.90213d0, 2.471d0, 0.75799d0, 0.68847d0,&
-      1.0653d0, 0.93264d0, 0.91496d0, 0.91921d0, 1d0, 1d0,&
-      1d0, 1d0, 1d0, 1d0, 1d0, 1d0,&
-      1d0, 1d0, 1d0, 1d0, 1d0, 1d0,&
-      1d0, 1d0, 1d0, 1d0, 1d0, 1d0,&
-      1d0, 1d0, 1d0, 1d0, 1d0, 1d0,&
-      1d0, 1d0, 1d0, 1d0, 1d0, 1d0,&
-      1d0, 1d0, 1d0, 1d0, 1d0, 1d0,&
-      1d0, 1d0, 1d0, 1d0, 1d0, 1d0,&
-      1d0, 1d0, 1d0, 1d0, 1d0, 1d0,&
-      1d0, 1d0, 1d0, 1d0, 1d0, 1d0,&
-      1d0, 1d0, 1d0, 1d0, 1d0, 1d0,&
-      1d0, 1d0, 1d0, 1d0, 1d0, 1d0,&
-      1d0, 1d0, 1d0 /)
+  real*8, parameter :: aws_m2(1:maxzat0) = (/&
+      0d0, 0d0, 74.036d0, 47.448d0, 33.952d0, 22.07d0,&
+      14.744d0, 10.245d0, 0d0, 0d0, 86.873d0, 78.852d0,&
+      69.081d0, 53.741d0, 41.423d0, 32.267d0, 0d0, 0d0,&
+      372.18d0, 288.56d0, 220.13d0, 223.33d0, 148.71d0, 125.11d0,&
+      110.46d0, 97.125d0, 83.619d0, 77.174d0, 47.987d0, 50.363d0,&
+      48.023d0, 43.524d0, 38.566d0, 33.951d0, 0d0, 0d0,&
+      348.04d0, 286.96d0, 214.85d0, 176.37d0, 181.36d0, 129.77d0,&
+      115.2d0, 55.471d0, 94.175d0, 113.21d0, 66.354d0, 71.542d0,&
+      67.402d0, 62.531d0, 57.353d0, 52.38d0, 0d0, 0d0,&
+      0d0, 0d0, 0d0, 0d0, 0d0, 0d0,&
+      0d0, 0d0, 0d0, 0d0, 0d0, 0d0,&
+      0d0, 0d0, 0d0, 0d0, 0d0, 0d0,&
+      0d0, 0d0, 0d0, 0d0, 0d0, 0d0,&
+      0d0, 0d0, 0d0, 0d0, 0d0, 0d0,&
+      0d0, 0d0, 0d0, 0d0, 0d0, 0d0,&
+      0d0, 0d0, 0d0, 0d0, 0d0, 0d0,&
+      0d0, 0d0, 0d0, 0d0, 0d0, 0d0,&
+      0d0, 0d0, 0d0, 0d0, 0d0, 0d0,&
+      0d0, 0d0, 0d0, 0d0, 0d0, 0d0,&
+      0d0, 0d0, 0d0, 0d0, 0d0, 0d0,&
+      0d0, 0d0, 0d0 /)
 
-  real*8, parameter :: rstern_ws_m3(1:maxzat0) = (/&
-      1d0, 1d0, 0.61279d0, 0.73583d0, 2.7697d0, 2.2775d0,&
-      2.0943d0, 1d0, 1d0, 1d0, 0.61002d0, 0.68614d0,&
-      1.3191d0, 1.2069d0, 1.2006d0, 1d0, 1d0, 1d0,&
-      0.99593d0, 0.99771d0, 1.2797d0, 0.96191d0, 0.94853d0, 0.95805d0,&
-      0.92659d0, 0.94655d0, 0.90979d0, 0.53194d0, 0.77609d0, 0.68589d0,&
-      0.87386d0, 0.83971d0, 0.86859d0, 1d0, 1d0, 1d0,&
-      0.79713d0, 0.63051d0, 0.62704d0, 0.79072d0, 0.73794d0, 0.79282d0,&
-      0.39695d0, 0.84964d0, 1.1158d0, 1.5225d0, 0.85668d0, 0.68508d0,&
-      1.0327d0, 0.90004d0, 0.88467d0, 1d0, 1d0, 1d0,&
-      1d0, 1d0, 1d0, 1d0, 1d0, 1d0,&
-      1d0, 1d0, 1d0, 1d0, 1d0, 1d0,&
-      1d0, 1d0, 1d0, 1d0, 1d0, 1d0,&
-      1d0, 1d0, 1d0, 1d0, 1d0, 1d0,&
-      1d0, 1d0, 1d0, 1d0, 1d0, 1d0,&
-      1d0, 1d0, 1d0, 1d0, 1d0, 1d0,&
-      1d0, 1d0, 1d0, 1d0, 1d0, 1d0,&
-      1d0, 1d0, 1d0, 1d0, 1d0, 1d0,&
-      1d0, 1d0, 1d0, 1d0, 1d0, 1d0,&
-      1d0, 1d0, 1d0, 1d0, 1d0, 1d0,&
-      1d0, 1d0, 1d0, 1d0, 1d0, 1d0,&
-      1d0, 1d0, 1d0 /)
+  real*8, parameter :: aws_m3(1:maxzat0) = (/&
+      0d0, 0d0, 113.49d0, 59.317d0, 41.153d0, 26.324d0,&
+      17.434d0, 0d0, 0d0, 0d0, 106.32d0, 84.067d0,&
+      73.887d0, 57.205d0, 44.016d0, 0d0, 0d0, 0d0,&
+      327.25d0, 278.71d0, 286.05d0, 177.53d0, 148.44d0, 123.08d0,&
+      109.74d0, 99.253d0, 85.188d0, 44.797d0, 50.392d0, 47.551d0,&
+      45.857d0, 41.936d0, 37.513d0, 0d0, 0d0, 0d0,&
+      309.37d0, 227.47d0, 189.09d0, 194.12d0, 138.27d0, 122d0,&
+      63.829d0, 98.769d0, 116.48d0, 69.757d0, 74.993d0, 71.19d0,&
+      65.336d0, 60.346d0, 55.455d0, 0d0, 0d0, 0d0,&
+      0d0, 0d0, 0d0, 0d0, 0d0, 0d0,&
+      0d0, 0d0, 0d0, 0d0, 0d0, 0d0,&
+      0d0, 0d0, 0d0, 0d0, 0d0, 0d0,&
+      0d0, 0d0, 0d0, 0d0, 0d0, 0d0,&
+      0d0, 0d0, 0d0, 0d0, 0d0, 0d0,&
+      0d0, 0d0, 0d0, 0d0, 0d0, 0d0,&
+      0d0, 0d0, 0d0, 0d0, 0d0, 0d0,&
+      0d0, 0d0, 0d0, 0d0, 0d0, 0d0,&
+      0d0, 0d0, 0d0, 0d0, 0d0, 0d0,&
+      0d0, 0d0, 0d0, 0d0, 0d0, 0d0,&
+      0d0, 0d0, 0d0, 0d0, 0d0, 0d0,&
+      0d0, 0d0, 0d0 /)
   real*8, parameter :: rstern_m1(1:maxzat0) = (/&
       5.6336d0, 8d0, 8d0, 8d0, 3.5144d0, 2.806d0,&
       2.6325d0, 2.3756d0, 2.8225d0, 8d0, 8d0, 8d0,&
