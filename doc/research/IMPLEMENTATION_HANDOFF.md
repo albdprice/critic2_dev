@@ -52,7 +52,7 @@ The three we actively push into postg/QE: **compute, stern, sternws** (+ hineutr
 - **QE 7.6** = `/root/critic2_development/q-e/` (staged to fir? no — built on dev-srv `~/qe_ca`).
 - **RULES:** push only to the fork, NEVER upstream. Commits user-attributed only, no
   co-author/attribution lines. No AI-assistant or scratchpad-path references in tracked files;
-  grep tracked files for such references before any commit. No web-artifact publishing for this project.
+  grep tracked files for such references before any commit. No hosted-webpage publishing for this project.
 
 ---
 
