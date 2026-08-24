@@ -31,7 +31,7 @@ The three we actively push into postg/QE: **compute, stern, sternws** (+ hineutr
   `gaussian/g16.c01` (g16!), `imkl/2024.2.0 libxc/6.2.2 flexiblas`, `scipy-stack`. NO 2FA snag.
 - **dev-srv**: `ssh albd@10.10.49.104` (sudo pw **800127828**). Git repo `~/critic2_dev`
   (branch research/xdm-hirshfeld-i, fork **albdprice/critic2_dev** — COMMIT/PUSH HERE ONLY,
-  user-attributed, NO Claude refs). Build critic2 on TANK `/data/Iterative_hirshfeld/critic2_build`
+  user-attributed only). Build critic2 on TANK `/data/Iterative_hirshfeld/critic2_build`
   (root disk full). ld1.x = `/usr/bin/ld1.x` (apt QE6.7). **Gaussian: g09 at `/home/albd/g09/g09`**
   (g09root=/home/albd; `. /home/albd/g09/bsd/g09.profile`); the `/home/albd/g16` dir is INCOMPLETE.
 - **tank** (corvette-local `/tank/research/xdm_chargeaware/`): DURABLE archive (fir/nibi scratch is
@@ -50,9 +50,9 @@ The three we actively push into postg/QE: **compute, stern, sternws** (+ hineutr
   toolchain + our `chargeaware.f90`). My working copy: `/root/critic2_development/postg/`
   (identical chargeaware.f90). postg is NOT the critic2 fork — separate codebase.
 - **QE 7.6** = `/root/critic2_development/q-e/` (staged to fir? no — built on dev-srv `~/qe_ca`).
-- **RULES:** push only to the fork, NEVER upstream. Commits user-attributed only (NO Claude /
-  Co-Authored-By). No claude/scratchpad/artifact refs in tracked files. No Artifact tool for this
-  project. `git grep -inE "claude|/tmp/claude|artifact/|anthropic"` before any commit.
+- **RULES:** push only to the fork, NEVER upstream. Commits user-attributed only, no
+  co-author/attribution lines. No AI-assistant or scratchpad-path references in tracked files;
+  grep tracked files for such references before any commit. No web-artifact publishing for this project.
 
 ---
 
